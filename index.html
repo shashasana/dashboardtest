@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Client Industry Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- LOGIN SCRIPT START -->
+<script>
+  const password = "yourPassword123"; // change to your password
+  if (!sessionStorage.getItem("loggedIn")) {
+    const userPass = prompt("Enter password:");
+    if (userPass === password) {
+      sessionStorage.setItem("loggedIn", "true");
+    } else {
+      document.body.innerHTML = "<h1 style='text-align:center;margin-top:50px;'>Access Denied</h1>";
+    }
+  }
+</script>
+<!-- LOGIN SCRIPT END -->
+<style>
+body { margin:0; font-family: Arial, sans-serif; height:100vh; }
+#container { display:grid; grid-template-columns:360px 1fr; height:100vh; }
+#sidebar { background:#f5f5f5; padding:15px; overflow-y:auto; border-right:1px solid #ccc; display:flex; flex-direction:column; }
+#sidebar input, #sidebar select, #sidebar button { width:100%; padding:8px; margin-bottom:10px; box-sizing:border-box; }
+#sidebar select[multiple] { height:250px; min-height:150px; overflow-y:auto; display:none; }
+#legendBox { margin:10px 0; padding:10px; background:white; border:1px solid #ccc; border-radius:5px; font-size:13px; display:flex; flex-direction:column; }
+.legend-item { display:flex; align-items:center; margin-bottom:6px; cursor:pointer; }
+.legend-color { width:14px; height:14px; margin-right:8px; border:1px solid #000; }
+#resetLegend { margin-bottom:10px; padding:5px; background:#e74c3c; color:white; border:none; border-radius:3px; cursor:pointer; }
+#resetLegend:hover { background:#c0392b; }
+#map { width:100%; height:100%; }
+#chartContainer { width:100%; height:450px; margin-bottom:10px; }
+#industryChart { width:100%; height:100%; }
+</style>
+</head>
+<body>
+<div id="container">
+  <div id="sidebar">
+    <h2>Client Dashboard</h2>
+    <div id="loadingStatus" style="padding:10px; background:#fff3cd; border-radius:5px; margin-bottom:10px; display:none; color:#856404;">
+      ⏳ Loading data...
+    </div>
+    <div id="controlButtons" style="display:flex; gap:5px; margin-bottom:15px;">
+      <button id="addClientBtn" style="flex:1; padding:8px; background:#27ae60; color:white; border:none; border-radius:3px; cursor:pointer; font-size:12px;">+ Add</button>
+      <button id="editClientBtn" style="flex:1; padding:8px; background:#3498db; color:white; border:none; border-radius:3px; cursor:pointer; font-size:12px;">✎ Edit</button>
+      <button id="deleteClientBtn" style="flex:1; padding:8px; background:#e74c3c; color:white; border:none; border-radius:3px; cursor:pointer; font-size:12px;">🗑 Delete</button>
+      <button id="trashBtn" style="flex:1; padding:8px; background:#95a5a6; color:white; border:none; border-radius:3px; cursor:pointer; font-size:12px;">📦 Trash</button>
+    </div>
+
+    <!-- Add Client Form -->
+    <div id="addClientForm" style="display:none; background:white; border:1px solid #ccc; padding:10px; border-radius:5px; margin-bottom:15px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+        <b>Add New Client</b>
+        <button class="closeForm" data-form="addClientForm" style="background:none; border:none; cursor:pointer; font-size:16px;">×</button>
+      </div>
+      <input type="text" id="newClientName" placeholder="Client Name" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
+      <input type="text" id="newClientIndustry" placeholder="Industry" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
+      <input type="text" id="newClientLocation" placeholder="Location (e.g., Austin, TX)" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
+      <input type="text" id="newClientServiceArea" placeholder="Service Area" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
+      <button id="saveClientBtn" style="width:100%; padding:8px; background:#27ae60; color:white; border:none; border-radius:3px; cursor:pointer;">Save Client</button>
+      <div id="geocodeStatus" style="margin-top:8px; padding:8px; background:#ecf0f1; border-radius:3px; display:none; font-size:12px;"></div>
+    </div>
+
+    <!-- Edit Client Form -->
+    <div id="editClientForm" style="display:none; background:white; border:1px solid #ccc; padding:10px; border-radius:5px; margin-bottom:15px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+        <b>Edit Client</b>
+        <button class="closeForm" data-form="editClientForm" style="background:none; border:none; cursor:pointer; font-size:16px;">×</button>
+      </div>
+      <select id="clientToEdit" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
+        <option value="">Select client to edit...</option>
+      </select>
+      <input type="text" id="editClientName" placeholder="Client Name" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
+      <input type="text" id="editClientIndustry" placeholder="Industry" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
+      <input type="text" id="editClientLocation" placeholder="Location" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
+      <input type="text" id="editClientServiceArea" placeholder="Service Area" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
+      <button id="saveEditBtn" style="width:100%; padding:8px; background:#3498db; color:white; border:none; border-radius:3px; cursor:pointer;" disabled>Save Changes</button>
+      <div id="editStatus" style="margin-top:8px; padding:8px; background:#ecf0f1; border-radius:3px; display:none; font-size:12px;"></div>
+    </div>
+
+    <!-- Delete Client Form -->
+    <div id="deleteClientForm" style="display:none; background:white; border:1px solid #ccc; padding:10px; border-radius:5px; margin-bottom:15px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+        <b>Delete Client</b>
+        <button class="closeForm" data-form="deleteClientForm" style="background:none; border:none; cursor:pointer; font-size:16px;">×</button>
+      </div>
+      <select id="clientToDelete" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
+        <option value="">Select client to delete...</option>
+      </select>
+      <button id="confirmDeleteBtn" style="width:100%; padding:8px; background:#e74c3c; color:white; border:none; border-radius:3px; cursor:pointer;" disabled>Delete Selected</button>
+      <div id="deleteStatus" style="margin-top:8px; padding:8px; background:#ecf0f1; border-radius:3px; display:none; font-size:12px;"></div>
+    </div>
+
+    <!-- Trash View -->
+    <div id="trashView" style="display:none; background:white; border:1px solid #ccc; padding:10px; border-radius:5px; margin-bottom:15px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+        <b>Trash</b>
+        <button class="closeForm" data-form="trashView" style="background:none; border:none; cursor:pointer; font-size:16px;">×</button>
+      </div>
+      <div id="trashList" style="max-height:200px; overflow-y:auto; font-size:12px;"></div>
+      <div id="trashStatus" style="margin-top:8px; padding:8px; background:#ecf0f1; border-radius:3px; display:none; font-size:12px;"></div>
+    </div>
+
+    <input type="text" id="searchBox" placeholder="Search client / industry / location..." style="margin-bottom:15px;">
+    <div id="legendBox"></div>
+    <button id="toggleChartType">Switch to Pie Chart</button>
+    <div id="chartContainer"><canvas id="industryChart"></canvas></div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script>
+// MAP INIT
+const map = L.map("map").setView([39.5,-98.35],4);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
+
+// COLORS
+const colors = {
+  "Speciality (Niche)":"#e74c3c","Window Treatments & Coverings":"#3498db","Home Organization & Closets":"#2ecc71",
+  "Kitchens":"#f39c12","Pools":"#1abc9c","Roofing":"#9b59b6","Construction":"#34495e",
+  "Painters":"#ff6f61","Fencing":"#16a085","Floor Coating":"#8e44ad","Landscaping":"#27ae60",
+  "Cleaning":"#00bcd4","Pest Control":"#795548","Flooring":"#607d8b","Events Place":"#d35400",
+  "Power Washing":"#00acc1","Home Improvement":"#5e35b1"
+};
+
+// GOOGLE SHEET CONFIG
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5CStbuCX63MtY3Z4NLXwnbijovY-bCqyUkBek-YrGSZ6CgAA1ZPzAEtVyc5YJLRoo/exec";
+
+// GEOCODE LOCATION
+async function geocodeLocation(location) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`);
+    const data = await res.json();
+    if(data.length > 0) {
+      return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    }
+  } catch(e) {}
+  return [39.5, -98.35];
+}
+
+// PARSE CSV
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let insideQuotes = false;
+  
+  for(let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+    
+    if(char === '"') {
+      if(insideQuotes && nextChar === '"') {
+        cell += '"';
+        i++;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+    } else if(char === ',' && !insideQuotes) {
+      row.push(cell.trim());
+      cell = "";
+    } else if((char === '\n' || char === '\r') && !insideQuotes) {
+      if(cell || row.length > 0) {
+        row.push(cell.trim());
+        if(row.some(c => c)) rows.push(row);
+        row = [];
+        cell = "";
+      }
+      if(char === '\r' && nextChar === '\n') i++;
+    } else {
+      cell += char;
+    }
+  }
+  if(cell || row.length > 0) {
+    row.push(cell.trim());
+    if(row.some(c => c)) rows.push(row);
+  }
+  return rows;
+}
+
+// FETCH CLIENTS
+async function fetchClientsFromSheet() {
+  try {
+    let csv = null;
+    try {
+      const res = await fetch(CSV_URL);
+      if(res.ok) csv = await res.text();
+    } catch(e) {}
+    
+    if(!csv) return [];
+    
+    const rows = parseCSV(csv);
+    if(rows.length < 2) return [];
+    
+    const parsed = [];
+    for(let i = 1; i < rows.length; i++) {
+      const cells = rows[i];
+      if(cells.length >= 3 && cells[0]) {
+        const name = cells[0].replace(/^"|"$/g, '').trim();
+        const industry = (cells[1] || "Unknown").replace(/^"|"$/g, '').trim();
+        const location = (cells[2] || "Unknown").replace(/^"|"$/g, '').trim();
+        const lat = cells[4] ? parseFloat(cells[4]) : null;
+        const lng = cells[5] ? parseFloat(cells[5]) : null;
+        
+        let coords = [39.5, -98.35];
+        if(lat && lng && !isNaN(lat) && !isNaN(lng)) {
+          coords = [lat, lng];
+        } else {
+          coords = await geocodeLocation(location);
+        }
+        parsed.push([name, industry, location, coords]);
+      }
+    }
+    return parsed;
+  } catch(e) {
+    return [];
+  }
+}
+
+let clients = [];
+let filteredClients = [];
+let legendStatus = {};
+let markers = [], chart=null, currentChartType="bar";
+
+(async () => {
+  clients = await fetchClientsFromSheet();
+  setupFilters();
+  buildLegend();
+  loadMarkers(clients);
+})();
+
+// FETCH WEATHER
+async function fetchWeather(lat, lng) {
+  try {
+    const apiKey = process.env.OPENWEATHER_API_KEY; // environment variable
+    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`);
+    const d = await res.json();
+    return { temp: d?.main?.temp !== undefined ? d.main.temp.toFixed(1) : "N/A", tzOffset: typeof d?.timezone === "number" ? d.timezone : 0 };
+  } catch(e){ return { temp:"N/A", tzOffset:0 }; }
+}
+
+// FORMAT LOCAL TIME
+function formatLocalTime(offsetSeconds) {
+  const utc = new Date().getTime() + new Date().getTimezoneOffset()*60000;
+  const local = new Date(utc + offsetSeconds*1000);
+  let hours = local.getHours();
+  const mins = String(local.getMinutes()).padStart(2,'0');
+  const ampm = hours>=12?"PM":"AM";
+  const hr12 = hours%12||12;
+  return `${hr12}:${mins} ${ampm}`;
+}
+
+// SETUP POPUP
+async function setupPopup(marker, client) {
+  const [name, inds, loc, coords] = client;
+  marker.bindPopup(`<b>${name}</b><br>Loading…`);
+  const update = async () => {
+    const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
+    const timeStr = formatLocalTime(tzOffset);
+    marker.getPopup().setContent(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Local Time: ${timeStr}<br>Temp: ${temp}°C`);
+  };
+  await update();
+  setInterval(update, 10*60*1000);
+}
+
+// LOAD MARKERS
+function loadMarkers(data) {
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+  filteredClients = data;
+  data.forEach(item=>{
+    const [_, inds, __, coords] = item;
+    const mk = L.circleMarker(coords,{ radius:8, fillColor: colors[inds.split(",")[0].trim()]||"#666", color:"#000", weight:1, fillOpacity:0.9 }).addTo(map);
+    mk.industries = inds.split(",").map(i=>i.trim());
+    if(mk.industries.some(i=>legendStatus[i])) map.removeLayer(mk);
+    setupPopup(mk, item);
+    markers.push(mk);
+  });
+  updateChart(data);
+}
+
+// UPDATE CHART
+function updateChart(data){
+  const counts={}, colorArr={};
+  data.forEach(c=>{
+    c[1].split(",").map(i=>i.trim()).forEach(i=>{ counts[i]=(counts[i]||0)+1; colorArr[i]=colors[i]||"#666"; });
+  });
+  let labels=Object.keys(counts).sort();
+  const values=labels.map(l=>counts[l]);
+  const bg=labels.map(l=>colorArr[l]);
+  if(chart) chart.destroy();
+  chart=new Chart(document.getElementById("industryChart"),{
+    type: currentChartType,
+    data:{ labels, datasets:[{ data:values, backgroundColor:bg, borderWidth:0 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false }}, scales: currentChartType==="bar"?{y:{beginAtZero:true},x:{display:false}}:{} }
+  });
+}
+
+// FILTERS
+function applyFilters(){
+  const s=document.getElementById("searchBox").value.toLowerCase().trim();
+  const filtered = clients.filter(c=>{
+    const txt=(c[0]+" "+c[1]+" "+c[2]).toLowerCase();
+    return !s || txt.includes(s);
+  });
+  loadMarkers(filtered);
+}
+
+function setupFilters(){}
+
+// GEOCODE & VALIDATE
+async function geocodeAndValidate(location) {
+  const statusDiv = document.getElementById("geocodeStatus");
+  statusDiv.innerHTML = "🔍 Geocoding...";
+  statusDiv.style.display = "block";
+  
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=3`);
+    const data = await res.json();
+    
+    if(data.length === 0) {
+      statusDiv.innerHTML = "❌ Location not found.";
+      return null;
+    }
+    
+    const top = data[0];
+    const confirmed = confirm(`Is this correct?\n\n${top.display_name}\n\nLat: ${top.lat}, Lon: ${top.lon}`);
+    
+    if(!confirmed) {
+      statusDiv.innerHTML = "⚠️ Try a different location.";
+      return null;
+    }
+    
+    statusDiv.innerHTML = `✓ Location confirmed`;
+    return [parseFloat(top.lat), parseFloat(top.lon)];
+  } catch(e) {
+    statusDiv.innerHTML = "⚠️ Error: " + e.message;
+    return null;
+  }
+}
+
+// ADD CLIENT
+document.getElementById("saveClientBtn").addEventListener("click", async () => {
+  const name = document.getElementById("newClientName").value.trim();
+  const industry = document.getElementById("newClientIndustry").value.trim();
+  const location = document.getElementById("newClientLocation").value.trim();
+  const serviceArea = document.getElementById("newClientServiceArea").value.trim();
+  
+  if(!name || !industry || !location) { alert("Fill in all fields"); return; }
+  
+  const statusDiv = document.getElementById("geocodeStatus");
+  const coords = await geocodeAndValidate(location);
+  if(!coords) return;
+  
+  statusDiv.innerHTML = "💾 Saving...";
+  
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "addClient", data: { name, industry, location, serviceArea, lat: coords[0], lng: coords[1] } })
+    });
+    
+    const result = await response.json();
+    if(result.success) {
+      statusDiv.innerHTML = "✅ Added! Refreshing...";
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      statusDiv.innerHTML = "❌ " + result.error;
+    }
+  } catch(e) {
+    statusDiv.innerHTML = "❌ " + e.message;
+  }
+});
+
+// DELETE
+function populateDeleteDropdown() {
+  const select = document.getElementById("clientToDelete");
+  select.innerHTML = "<option value=''>Select client...</option>";
+  clients.forEach((c, idx) => {
+    const opt = document.createElement("option");
+    opt.value = idx;
+    opt.textContent = c[0];
+    select.appendChild(opt);
+  });
+}
+
+document.getElementById("clientToDelete").addEventListener("change", (e) => {
+  document.getElementById("confirmDeleteBtn").disabled = e.target.value === "";
+});
+
+document.getElementById("confirmDeleteBtn").addEventListener("click", async () => {
+  const idx = parseInt(document.getElementById("clientToDelete").value);
+  if(isNaN(idx)) return;
+  
+  const client = clients[idx];
+  if(!confirm(`Delete "${client[0]}"?`)) return;
+  
+  const statusDiv = document.getElementById("deleteStatus");
+  statusDiv.innerHTML = "⏳ Deleting...";
+  statusDiv.style.display = "block";
+  
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "deleteClient", data: { clientName: client[0] } })
+    });
+    
+    const result = await response.json();
+    if(result.success) {
+      statusDiv.innerHTML = "✅ Deleted!";
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      statusDiv.innerHTML = "❌ " + result.error;
+    }
+  } catch(e) {
+    statusDiv.innerHTML = "❌ " + e.message;
+  }
+});
+
+// TRASH
+document.getElementById("trashBtn").addEventListener("click", async () => {
+  const trashView = document.getElementById("trashView");
+  trashView.style.display = trashView.style.display === "none" ? "block" : "none";
+  
+  if(trashView.style.display === "block") {
+    const trashList = document.getElementById("trashList");
+    trashList.innerHTML = "Loading...";
+    
+    try {
+      const response = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "getTrash" })
+      });
+      
+      const result = await response.json();
+      
+      if(result.success && result.trash && result.trash.length > 0) {
+        trashList.innerHTML = result.trash.map((item, idx) => `
+          <div style="padding:8px; border-bottom:1px solid #eee;">
+            <b>${item[0]}</b><br><small>${item[1]} | ${item[2]}</small>
+            <div style="margin-top:5px;">
+              <button class="restoreBtn" data-idx="${idx}" style="padding:3px 6px; background:#27ae60; color:white; border:none; border-radius:2px; cursor:pointer; font-size:10px; margin-right:3px;">Restore</button>
+              <button class="deletePermBtn" data-idx="${idx}" style="padding:3px 6px; background:#c0392b; color:white; border:none; border-radius:2px; cursor:pointer; font-size:10px;">Delete</button>
+            </div>
+          </div>
+        `).join("");
+        
+        document.querySelectorAll(".restoreBtn").forEach(btn => {
+          btn.addEventListener("click", async (e) => {
+            if(confirm("Restore?")) await restoreClient(parseInt(e.target.dataset.idx));
+          });
+        });
+        
+        document.querySelectorAll(".deletePermBtn").forEach(btn => {
+          btn.addEventListener("click", async (e) => {
+            if(confirm("Permanently delete?")) await permanentlyDeleteClient(parseInt(e.target.dataset.idx));
+          });
+        });
+      } else {
+        trashList.innerHTML = "Empty";
+      }
+    } catch(e) {
+      trashList.innerHTML = "Error: " + e.message;
+    }
+  }
+});
+
+async function restoreClient(idx) {
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "restoreClient", index: idx })
+    });
+    const result = await response.json();
+    if(result.success) setTimeout(() => location.reload(), 1500);
+  } catch(e) {}
+}
+
+async function permanentlyDeleteClient(idx) {
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "permanentlyDelete", index: idx })
+    });
+    const result = await response.json();
+    if(result.success) setTimeout(() => location.reload(), 1500);
+  } catch(e) {}
+}
+
+// BUTTON LISTENERS
+document.getElementById("addClientBtn").addEventListener("click", () => {
+  const form = document.getElementById("addClientForm");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+});
+
+document.getElementById("editClientBtn").addEventListener("click", () => {
+  const form = document.getElementById("editClientForm");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+  if(form.style.display === "block") populateEditDropdown();
+});
+
+// EDIT CLIENT DROPDOWN
+function populateEditDropdown() {
+  const select = document.getElementById("clientToEdit");
+  select.innerHTML = "<option value=''>Select client to edit...</option>";
+  clients.forEach((c, idx) => {
+    const opt = document.createElement("option");
+    opt.value = idx;
+    opt.textContent = c[0];
+    select.appendChild(opt);
+  });
+}
+
+document.getElementById("clientToEdit").addEventListener("change", (e) => {
+  const idx = parseInt(e.target.value);
+  if(isNaN(idx)) {
+    document.getElementById("editClientName").disabled = true;
+    document.getElementById("editClientIndustry").disabled = true;
+    document.getElementById("editClientLocation").disabled = true;
+    document.getElementById("editClientServiceArea").disabled = true;
+    document.getElementById("saveEditBtn").disabled = true;
+    return;
+  }
+  
+  const client = clients[idx];
+  document.getElementById("editClientName").value = client[0];
+  document.getElementById("editClientIndustry").value = client[1];
+  document.getElementById("editClientLocation").value = client[2];
+  document.getElementById("editClientServiceArea").value = client[3] || "";
+  
+  document.getElementById("editClientName").disabled = false;
+  document.getElementById("editClientIndustry").disabled = false;
+  document.getElementById("editClientLocation").disabled = false;
+  document.getElementById("editClientServiceArea").disabled = false;
+  document.getElementById("saveEditBtn").disabled = false;
+});
+
+// SAVE EDIT
+document.getElementById("saveEditBtn").addEventListener("click", async () => {
+  const idx = parseInt(document.getElementById("clientToEdit").value);
+  if(isNaN(idx)) return;
+  
+  const originalClient = clients[idx];
+  const newName = document.getElementById("editClientName").value.trim();
+  const newIndustry = document.getElementById("editClientIndustry").value.trim();
+  const newLocation = document.getElementById("editClientLocation").value.trim();
+  const newServiceArea = document.getElementById("editClientServiceArea").value.trim();
+  
+  if(!newName || !newIndustry || !newLocation) {
+    alert("Please fill in Name, Industry, and Location");
+    return;
+  }
+  
+  if(!confirm(`Update "${originalClient[0]}"?`)) return;
+  
+  const statusDiv = document.getElementById("editStatus");
+  statusDiv.innerHTML = "⏳ Updating...";
+  statusDiv.style.display = "block";
+  
+  if(!APPS_SCRIPT_URL) {
+    statusDiv.innerHTML = "Apps Script not configured.";
+    return;
+  }
+  
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "editClient",
+        data: {
+          originalName: originalClient[0],
+          name: newName,
+          industry: newIndustry,
+          location: newLocation,
+          serviceArea: newServiceArea,
+          lat: originalClient[3][0],
+          lng: originalClient[3][1]
+        }
+      })
+    });
+    
+    const result = await response.json();
+    if(result.success) {
+      statusDiv.innerHTML = "✅ Updated! Refreshing...";
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      statusDiv.innerHTML = "❌ Error: " + result.error;
+    }
+  } catch(e) {
+    statusDiv.innerHTML = "❌ Error: " + e.message;
+  }
+});
+
+document.getElementById("deleteClientBtn").addEventListener("click", () => {
+  const form = document.getElementById("deleteClientForm");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+  if(form.style.display === "block") populateDeleteDropdown();
+});
+
+document.querySelectorAll(".closeForm").forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    document.getElementById(e.target.dataset.form).style.display = "none";
+  });
+});
+
+function buildLegend(){
+  const box=document.getElementById("legendBox");
+  box.innerHTML="<button id='resetLegend'>Reset All</button><b>Industry</b><br><br>";
+  const set=new Set();
+  clients.forEach(c=>c[1].split(",").forEach(i=>set.add(i.trim())));
+  [...set].sort().forEach(ind=>{
+    legendStatus[ind]=legendStatus[ind]||false;
+    const div=document.createElement("div");
+    div.className="legend-item";
+    div.innerHTML=`<div class="legend-color" style="background:${colors[ind]||"#666"}"></div>${ind}`;
+    div.style.textDecoration=legendStatus[ind]?'line-through':'none';
+    div.onclick=()=>{
+      legendStatus[ind]=!legendStatus[ind];
+      div.style.textDecoration=legendStatus[ind]?'line-through':'none';
+      applyFilters();
+    };
+    box.appendChild(div);
+  });
+
+  document.getElementById("resetLegend").onclick = () => {
+    Object.keys(legendStatus).forEach(k=>legendStatus[k]=false);
+    document.querySelectorAll(".legend-item").forEach(d=>d.style.textDecoration="none");
+    applyFilters();
+  }
+}
+
+// INIT
+document.getElementById("searchBox").addEventListener("input",applyFilters);
+document.getElementById("toggleChartType").addEventListener("click",()=>{
+  currentChartType=currentChartType==="bar"?"pie":"bar";
+  document.getElementById("toggleChartType").innerText=currentChartType==="bar"?"Switch to Pie Chart":"Switch to Bar Chart";
+  updateChart(filteredClients);
+});
+
+</script>
+</body>
+</html>
