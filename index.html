@@ -112,6 +112,7 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
 </div>
 
 <script>
+document.addEventListener("DOMContentLoaded", () => {
 // MAP INIT
 const map = L.map("map").setView([39.5,-98.35],4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
@@ -647,6 +648,7 @@ document.getElementById("toggleChartType").addEventListener("click",()=>{
   updateChart(filteredClients);
 });
 
+});
 </script>
 </body>
 </html>

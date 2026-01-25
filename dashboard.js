@@ -1,4 +1,5 @@
 // MAP INIT
+document.addEventListener("DOMContentLoaded", () => {
 const map = L.map("map").setView([39.5,-98.35],4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
 
@@ -560,4 +561,5 @@ document.querySelectorAll(".closeForm").forEach(btn => {
     const formId = e.target.dataset.form;
     document.getElementById(formId).style.display = "none";
   });
+});
 });
