@@ -67,8 +67,8 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
       <input type="text" id="newClientIndustry" placeholder="Industry" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
       <input type="text" id="newClientLocation" placeholder="Location (e.g., Austin, TX)" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
       <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-        <input type="text" id="newClientServiceArea" placeholder="Service Area" style="flex:1; padding:6px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
-        <button id="toggleNewAreaEdit" type="button" title="Edit Service Area" style="padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;">✎</button>
+        <textarea id="newClientServiceArea" placeholder="Service Area" rows="3" style="flex:1; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px; height:64px; resize:vertical; font-size:13px;" disabled></textarea>
+        <button id="toggleNewAreaEdit" type="button" title="Edit Service Area" style="padding:3px 6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px; font-size:12px;">✎</button>
       </div>
       <input type="text" id="areaSearchAdd" placeholder="Search ZIP / city / area to preview" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
       <div style="display:flex; gap:6px; margin-bottom:8px;">
@@ -93,8 +93,8 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
       <input type="text" id="editClientIndustry" placeholder="Industry" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <input type="text" id="editClientLocation" placeholder="Location" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-        <input type="text" id="editClientServiceArea" placeholder="Service Area" style="flex:1; padding:6px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
-        <button id="toggleEditAreaEdit" type="button" title="Edit Service Area" style="padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>✎</button>
+        <textarea id="editClientServiceArea" placeholder="Service Area" rows="3" style="flex:1; padding:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px; height:64px; resize:vertical; font-size:13px;" disabled></textarea>
+        <button id="toggleEditAreaEdit" type="button" title="Edit Service Area" style="padding:3px 6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px; font-size:12px;" disabled>✎</button>
       </div>
       <input type="text" id="areaSearchEdit" placeholder="Search ZIP / city / area to preview" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <div style="display:flex; gap:6px; margin-bottom:8px;">
@@ -158,6 +158,12 @@ document.addEventListener("DOMContentLoaded", () => {
 // MAP INIT
 const map = L.map("map").setView([39.5,-98.35],4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
+// Create a dedicated pane for service-area layers so markers remain clickable
+try {
+  map.createPane('serviceAreaPane');
+  const p = map.getPane('serviceAreaPane');
+  if (p) { p.style.zIndex = 350; }
+} catch(_) {}
 
 // COLORS
 const colors = {
@@ -408,7 +414,8 @@ async function previewServiceAreaEntry(entry, statusEl, contextKey) {
       if (!result || !result.feature) continue;
       previewLayer = L.geoJSON(result.feature, { style: SERVICE_AREA_STYLE }).addTo(map);
       try {
-        previewLayer.on('mouseover', () => {
+        // Use click-to-confirm to avoid repeated prompts on hover
+        previewLayer.once('click', () => {
           const ask = confirm(`Add ${result.label || attempt} to Service Area?`);
           if (!ask) return;
           const input = (contextKey === 'edit') ? document.getElementById('editClientServiceArea') : document.getElementById('newClientServiceArea');
@@ -644,7 +651,7 @@ async function setupServiceAreaOnClick(marker, client) {
       } catch(err) { console.error('[SA-UNION] Error:', err); }
     }
     try {
-      L.geoJSON(unionFeat, { style: SERVICE_AREA_STYLE, interactive:false }).addTo(group);
+      L.geoJSON(unionFeat, { style: SERVICE_AREA_STYLE, interactive:false, pane:'serviceAreaPane' }).addTo(group);
       console.log('[SA-RENDER] Union polygon added to map');
     } catch(err) { console.error('[SA-RENDER] Error adding union:', err); }
 
@@ -680,7 +687,7 @@ async function setupServiceAreaOnClick(marker, client) {
     // Add invisible hover layers for per-entry tooltips
     try {
       features.forEach((f, idx) => {
-        L.geoJSON(f, { style: { color:'#0000', weight:0, fillOpacity:0, interactive:true } })
+        L.geoJSON(f, { style: { color:'#0000', weight:0, fillOpacity:0, interactive:true }, pane:'serviceAreaPane' })
           .addTo(group)
           .bindTooltip(labels[idx], { permanent:false, direction:'center' });
       });
@@ -692,7 +699,7 @@ async function setupServiceAreaOnClick(marker, client) {
         for (let j=i+1;j<features.length;j++) {
           try {
             const inter = turf.intersect(features[i], features[j]);
-            if (inter) L.geoJSON(inter, { style: OVERLAP_STYLE }).addTo(group);
+            if (inter) L.geoJSON(inter, { style: OVERLAP_STYLE, pane:'serviceAreaPane' }).addTo(group);
           } catch(_) {}
         }
       }

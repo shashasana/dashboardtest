@@ -4,6 +4,12 @@ document.addEventListener("DOMContentLoaded", () => {
 console.log('[DASHBOARD] DOMContentLoaded fired, initializing map...');
 const map = L.map("map").setView([39.5,-98.35],4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
+// Create a dedicated pane for service-area layers so markers stay clickable
+try {
+  map.createPane('serviceAreaPane');
+  const p = map.getPane('serviceAreaPane');
+  if (p) { p.style.zIndex = 350; }
+} catch(_) {}
 console.log('[DASHBOARD] Map initialized successfully');
 
 // STATE
@@ -538,7 +544,9 @@ async function setupServiceAreaOnClick(marker, client) {
         console.log(`[SA-CLICK] Marker clicked: ${name}`);
         const existing = window.__serviceAreaLayers[name];
         if (existing) {
-          try { existing.remove(); } catch(_) {}
+          // Robust removal of previously rendered group
+          try { map.removeLayer(existing); } catch(_) {}
+          try { existing.clearLayers(); } catch(_) {}
           delete window.__serviceAreaLayers[name];
           return;
         }
@@ -578,7 +586,7 @@ async function setupServiceAreaOnClick(marker, client) {
           }
         }
         try {
-          L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE, interactive:false }).addTo(group);
+          L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE, interactive:false, pane:'serviceAreaPane' }).addTo(group);
           console.log('[SA-RENDER] Union polygon added to map');
         } catch(err) { console.error('[SA-RENDER] Error adding union:', err); }
         
@@ -599,7 +607,7 @@ async function setupServiceAreaOnClick(marker, client) {
         
         // Invisible interactive layers per entry for hover tooltips
         for (const { feature, label } of results) {
-          const invisible = L.geoJSON(feature, { style: { opacity:0, fillOpacity:0 }, interactive:true });
+          const invisible = L.geoJSON(feature, { style: { opacity:0, fillOpacity:0 }, interactive:true, pane:'serviceAreaPane' });
           invisible.addTo(group).bindTooltip(label, { permanent:false, direction:'center' });
         }
         // Dashed overlaps between entries only where they intersect
@@ -619,10 +627,11 @@ async function setupServiceAreaOnClick(marker, client) {
         // Add dashed boundary lines for each ZIP
         try {
           for (const { feature, label } of results) {
-            // Render dashed outline for each ZIP boundary
+            // Render dashed outline for each ZIP boundary in dedicated pane
             L.geoJSON(feature, { 
               style: { color:'#333', weight:2, dashArray:'5 5', fillOpacity:0, interactive:true },
-              interactive: true 
+              interactive: true,
+              pane: 'serviceAreaPane'
             }).addTo(group).bindTooltip(label, { permanent:false, direction:'center' });
           }
         } catch(err) { console.error('[SA-BOUNDARIES] Error:', err); }
