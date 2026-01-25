@@ -210,6 +210,7 @@ let markers = [], chart=null, currentChartType="bar";
 async function fetchWeather(lat, lng) {
   try {
     const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`); // call serverless API
+    if (!res.ok) return { temp:"N/A", tzOffset:0 };
     const d = await res.json();
     return {
       temp: typeof d?.main?.temp === "number" ? d.main.temp.toFixed(1) : "N/A",
@@ -236,7 +237,7 @@ async function setupPopup(marker, client) {
   try {
     const [name, inds, loc, serviceArea, coords] = client;
     console.log(`[POPUP-SETUP] Setting up popup for: ${name}`);
-    marker.bindPopup(`<b>${name}</b><br>Loading…`);
+    marker.bindPopup(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Loading…`);
     const update = async () => {
       try {
         const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
@@ -246,6 +247,9 @@ async function setupPopup(marker, client) {
         );
       } catch(weatherErr) {
         console.error(`[POPUP] Weather fetch error for ${name}:`, weatherErr);
+        marker.getPopup().setContent(
+          `<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Time: N/A<br>Temp: N/A`
+        );
       }
     };
     await update();
@@ -527,73 +531,84 @@ async function setupServiceAreaOnClick(marker, client) {
     marker.on('click', async () => {
       try {
         console.log(`[SA-CLICK] Marker clicked: ${name}`);
-    const existing = window.__serviceAreaLayers[name];
-    if (existing) { try { existing.remove(); } catch(_){} delete window.__serviceAreaLayers[name]; return; }
-    const group = L.layerGroup().addTo(map);
-    const results = [];
-    for (const e of entries) {
-      const result = await fetchPolygonForEntry(e);
-      if (!result || !result.feature) continue;
-      results.push(result);
-    }
-    if (results.length === 0) {
-      // Fallback: render a small area around the client's location
-      try {
-        const lat = coords[0], lon = coords[1];
-        let feature = null;
-        if (typeof turf !== 'undefined' && turf.circle) {
-          feature = turf.circle([lon, lat], 5, { steps:64, units:'kilometers' });
-        } else {
-          feature = createSquareFeature(lon, lat, 5);
+        const existing = window.__serviceAreaLayers[name];
+        if (existing) {
+          try { existing.remove(); } catch(_) {}
+          delete window.__serviceAreaLayers[name];
+          return;
         }
-        L.geoJSON(feature, { style: SERVICE_AREA_STYLE }).addTo(group).bindTooltip('Location area', { permanent:false, direction:'center' });
-      } catch(_) {}
-      window.__serviceAreaLayers[name] = group; return;
-    }
-    // Union all features for a clean solid polygon
-    let unionFeature = results[0].feature;
-    if (typeof turf !== 'undefined' && turf.union) {
-      for (let i=1;i<results.length;i++) {
-        try {
-          const u = turf.union(unionFeature, results[i].feature);
-          if (u) unionFeature = u;
-        } catch(_) {}
-      }
-    }
-    L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE }).addTo(group);
-    
-    // Add blue pin icons with shadow at each entry center
-    const pinIcon = L.icon({
-      iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="36" viewBox="0 0 24 36"><defs><filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feOffset dx="0" dy="2" result="offsetblur"/><feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M12 0C7.03 0 3 4.03 3 9c0 6.75 9 18 9 18s9-11.25 9-18c0-4.97-4.03-9-9-9z" fill="#3498db" filter="url(#shadow)"/><circle cx="12" cy="9" r="3" fill="white"/></svg>`),
-      iconSize: [24, 36],
-      iconAnchor: [12, 36],
-      popupAnchor: [0, -36]
-    });
-    for (const { feature, label } of results) {
-      if (typeof turf !== 'undefined' && turf.center) {
-        const center = turf.center(feature);
-        const [lng, lat] = center.geometry.coordinates;
-        L.marker([lat, lng], { icon: pinIcon }).addTo(group);
-      }
-    }
-    
-    // Invisible interactive layers per entry for hover tooltips
-    for (const { feature, label } of results) {
-      const invisible = L.geoJSON(feature, { style: { opacity:0, fillOpacity:0 }, interactive:true });
-      invisible.addTo(group).bindTooltip(label, { permanent:false, direction:'center' });
-    }
-    // Dashed overlaps between entries only where they intersect
-    if (typeof turf !== 'undefined' && turf.intersect) {
-      for (let i=0;i<results.length;i++) {
-        for (let j=i+1;j<results.length;j++) {
+
+        const group = L.layerGroup().addTo(map);
+        const results = [];
+        for (const e of entries) {
+          const result = await fetchPolygonForEntry(e);
+          if (!result || !result.feature) continue;
+          results.push(result);
+        }
+
+        if (results.length === 0) {
+          // Fallback: render a small area around the client's location
           try {
-            const overlap = turf.intersect(results[i].feature, results[j].feature);
-            if (overlap) {
-              L.geoJSON(overlap, { style: OVERLAP_STYLE }).addTo(group);
+            const lat = coords[0], lon = coords[1];
+            let feature = null;
+            if (typeof turf !== 'undefined' && turf.circle) {
+              feature = turf.circle([lon, lat], 5, { steps:64, units:'kilometers' });
+            } else {
+              feature = createSquareFeature(lon, lat, 5);
             }
+            L.geoJSON(feature, { style: SERVICE_AREA_STYLE }).addTo(group).bindTooltip('Location area', { permanent:false, direction:'center' });
           } catch(_) {}
+          window.__serviceAreaLayers[name] = group;
+          return;
         }
-      }
+
+        // Union all features for a clean solid polygon
+        let unionFeature = results[0].feature;
+        if (typeof turf !== 'undefined' && turf.union) {
+          for (let i=1;i<results.length;i++) {
+            try {
+              const u = turf.union(unionFeature, results[i].feature);
+              if (u) unionFeature = u;
+            } catch(_) {}
+          }
+        }
+        L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE }).addTo(group);
+        
+        // Add blue pin icons with shadow at each entry center
+        const pinIcon = L.icon({
+          iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="36" viewBox="0 0 24 36"><defs><filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feOffset dx="0" dy="2" result="offsetblur"/><feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M12 0C7.03 0 3 4.03 3 9c0 6.75 9 18 9 18s9-11.25 9-18c0-4.97-4.03-9-9-9z" fill="#3498db" filter="url(#shadow)"/><circle cx="12" cy="9" r="3" fill="white"/></svg>`),
+          iconSize: [24, 36],
+          iconAnchor: [12, 36],
+          popupAnchor: [0, -36]
+        });
+        for (const { feature, label } of results) {
+          if (typeof turf !== 'undefined' && turf.center) {
+            const center = turf.center(feature);
+            const [lng, lat] = center.geometry.coordinates;
+            L.marker([lat, lng], { icon: pinIcon }).addTo(group);
+          }
+        }
+        
+        // Invisible interactive layers per entry for hover tooltips
+        for (const { feature, label } of results) {
+          const invisible = L.geoJSON(feature, { style: { opacity:0, fillOpacity:0 }, interactive:true });
+          invisible.addTo(group).bindTooltip(label, { permanent:false, direction:'center' });
+        }
+        // Dashed overlaps between entries only where they intersect
+        if (typeof turf !== 'undefined' && turf.intersect) {
+          for (let i=0;i<results.length;i++) {
+            for (let j=i+1;j<results.length;j++) {
+              try {
+                const overlap = turf.intersect(results[i].feature, results[j].feature);
+                if (overlap) {
+                  L.geoJSON(overlap, { style: OVERLAP_STYLE }).addTo(group);
+                }
+              } catch(_) {}
+            }
+          }
+        }
+
+        window.__serviceAreaLayers[name] = group;
       } catch(clickErr) {
         console.error(`[SA-CLICK] Error in click handler for ${name}:`, clickErr);
         console.error(clickErr.stack);
@@ -603,8 +618,6 @@ async function setupServiceAreaOnClick(marker, client) {
     console.error(`[SA-SETUP] Error setting up service area click for ${name}:`, setupErr);
     console.error(setupErr.stack);
   }
-    window.__serviceAreaLayers[name] = group;
-  });
 }
 
 // CHART

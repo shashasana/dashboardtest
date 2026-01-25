@@ -285,6 +285,7 @@ let markers = [], chart=null, currentChartType="bar";
 async function fetchWeather(lat, lng) {
   try {
     const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+    if (!res.ok) return { temp:"N/A", tzOffset:0 };
     const d = await res.json();
     return {
       temp: typeof d?.main?.temp === "number" ? d.main.temp.toFixed(1) : "N/A",
@@ -309,11 +310,15 @@ function formatLocalTime(offsetSeconds) {
 // SETUP POPUP
 async function setupPopup(marker, client) {
   const [name, inds, loc, serviceArea, coords] = client;
-  marker.bindPopup(`<b>${name}</b><br>Loading…`);
+  marker.bindPopup(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Loading…`);
   const update = async () => {
-    const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
-    const timeStr = formatLocalTime(tzOffset);
-    marker.getPopup().setContent(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Local Time: ${timeStr}<br>Temp: ${temp}°C`);
+    try {
+      const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
+      const timeStr = formatLocalTime(tzOffset);
+      marker.getPopup().setContent(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Local Time: ${timeStr}<br>Temp: ${temp}°C`);
+    } catch(_) {
+      marker.getPopup().setContent(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Local Time: N/A<br>Temp: N/A`);
+    }
   };
   await update();
   setInterval(update, 10*60*1000);
