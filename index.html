@@ -205,13 +205,14 @@ async function fetchClientsFromSheet() {
         const lat = cells[4] ? parseFloat(cells[4]) : null;
         const lng = cells[5] ? parseFloat(cells[5]) : null;
         
+        const serviceArea = (cells[3] || "").replace(/^"|"$/g, '').trim();
         let coords = [39.5, -98.35];
         if(lat && lng && !isNaN(lat) && !isNaN(lng)) {
           coords = [lat, lng];
         } else {
           coords = await geocodeLocation(location);
         }
-        parsed.push([name, industry, location, coords]);
+        parsed.push([name, industry, location, serviceArea, coords]);
       }
     }
     return parsed;
@@ -582,8 +583,8 @@ document.getElementById("saveEditBtn").addEventListener("click", async () => {
           industry: newIndustry,
           location: newLocation,
           serviceArea: newServiceArea,
-          lat: originalClient[3][0],
-          lng: originalClient[3][1]
+          lat: originalClient[4][0],
+          lng: originalClient[4][1]
         }
       })
     });

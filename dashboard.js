@@ -98,6 +98,7 @@ async function fetchClientsFromSheet() {
             const name = (cells[0] || "").toString().trim();
             const industry = (cells[1] || "Unknown").toString().trim();
             const location = (cells[2] || "Unknown").toString().trim();
+            const serviceArea = (cells[3] || "").toString().trim();
             const lat = cells[4] ? parseFloat(cells[4]) : null;
             const lng = cells[5] ? parseFloat(cells[5]) : null;
             
@@ -107,7 +108,7 @@ async function fetchClientsFromSheet() {
             } else {
               coords = await geocodeLocation(location);
             }
-            parsed.push([name, industry, location, coords]);
+            parsed.push([name, industry, location, serviceArea, coords]);
           }
         }
         console.log("Loaded " + parsed.length + " clients from Database sheet");
@@ -147,6 +148,7 @@ async function fetchFromCSV() {
         const name = cells[0].replace(/^"|"$/g, '').trim();
         const industry = (cells[1] || "Unknown").replace(/^"|"$/g, '').trim();
         const location = (cells[2] || "Unknown").replace(/^"|"$/g, '').trim();
+        const serviceArea = (cells[3] || "").replace(/^"|"$/g, '').trim();
         const lat = cells[4] ? parseFloat(cells[4]) : null;
         const lng = cells[5] ? parseFloat(cells[5]) : null;
         
@@ -156,7 +158,7 @@ async function fetchFromCSV() {
         } else {
           coords = await geocodeLocation(location);
         }
-        parsed.push([name, industry, location, coords]);
+        parsed.push([name, industry, location, serviceArea, coords]);
       }
     }
     return parsed;
@@ -215,7 +217,7 @@ function formatLocalTime(offsetSeconds) {
 
 // POPUP
 async function setupPopup(marker, client) {
-  const [name, inds, loc, coords] = client;
+  const [name, inds, loc, serviceArea, coords] = client;
   marker.bindPopup(`<b>${name}</b><br>Loading…`);
   const update = async () => {
     const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
@@ -234,7 +236,7 @@ function loadMarkers(data) {
   markers=[];
   filteredClients = data; // Track filtered data for chart
   data.forEach(item=>{
-    const [_, inds, __, coords] = item;
+    const [_, inds, __, ___, coords] = item;
     const mk = L.circleMarker(coords,{
       radius:8, fillColor: colors[inds.split(",")[0].trim()]||"#666",
       color:"#000", weight:1, fillOpacity:0.9
