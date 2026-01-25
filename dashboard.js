@@ -29,7 +29,7 @@ const colors = {
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
 
 // APPS SCRIPT ENDPOINT - UPDATE THIS AFTER DEPLOYING
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7MUHb_Ee8H_Qajwc4OEh4-U5ZLtIDU0m9Je2N9yzJHYPwmitnhzJ5Z08e3gVcfcKX/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxrSX96FuF-B7MFG1d458bdgnnVkyh1TWFuQDFnYur5vywe4OqzOoOZJ_DyuegddOic/exec";
 
 // PARSE CSV
 function parseCSV(text) {
@@ -344,10 +344,15 @@ function clearPreviewLayer() {
   }
 }
 
-function appendEntryToInput(inputEl, entry) {
+function appendEntryToInput(inputEl, entry, statusEl) {
   const parts = inputEl.value.split(',').map(p => p.trim()).filter(Boolean);
-  if (!parts.includes(entry)) parts.push(entry);
+  if (parts.includes(entry)) {
+    if (statusEl) setPreviewStatus(statusEl, `"${entry}" already exists in Service Area`);
+    return false; // duplicate
+  }
+  parts.push(entry);
   inputEl.value = parts.join(', ');
+  return true; // added successfully
 }
 
 function setPreviewStatus(el, msg) {

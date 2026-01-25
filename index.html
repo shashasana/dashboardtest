@@ -176,7 +176,7 @@ const colors = {
 
 // GOOGLE SHEET CONFIG
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7MUHb_Ee8H_Qajwc4OEh4-U5ZLtIDU0m9Je2N9yzJHYPwmitnhzJ5Z08e3gVcfcKX/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxrSX96FuF-B7MFG1d458bdgnnVkyh1TWFuQDFnYur5vywe4OqzOoOZJ_DyuegddOic/exec";
 
 // GEOCODE LOCATION
 async function geocodeLocation(location) {
@@ -380,10 +380,15 @@ function clearPreviewLayer() {
   }
 }
 
-function appendEntryToInput(inputEl, entry) {
+function appendEntryToInput(inputEl, entry, statusEl) {
   const parts = inputEl.value.split(',').map(p => p.trim()).filter(Boolean);
-  if (!parts.includes(entry)) parts.push(entry);
+  if (parts.includes(entry)) {
+    if (statusEl) setPreviewStatus(statusEl, `"${entry}" already exists in Service Area`);
+    return false; // duplicate
+  }
+  parts.push(entry);
   inputEl.value = parts.join(', ');
+  return true; // added successfully
 }
 function dedupeServiceAreaInput(inputEl) {
   const parts = inputEl.value.split(',').map(p => p.trim()).filter(Boolean);
@@ -414,38 +419,41 @@ async function previewServiceAreaEntry(entry, statusEl, contextKey) {
       if (!result || !result.feature) continue;
       previewLayer = L.geoJSON(result.feature, { style: SERVICE_AREA_STYLE }).addTo(map);
       try {
-        // Use click-to-confirm to avoid repeated prompts on hover
-        previewLayer.once('click', () => {
+        // Use click (not once) to allow multiple prompts on same preview
+        previewLayer.on('click', () => {
           const ask = confirm(`Add ${result.label || attempt} to Service Area?`);
           if (!ask) return;
           const input = (contextKey === 'edit') ? document.getElementById('editClientServiceArea') : document.getElementById('newClientServiceArea');
-          appendEntryToInput(input, result.label || attempt);
-          dedupeServiceAreaInput(input);
-          setPreviewStatus(statusEl, `Added ${result.label || attempt} to Service Area`);
-          if (contextKey === 'edit') {
-            try {
-              const idxVal = parseInt(document.getElementById('clientToEdit').value);
-              if (!isNaN(idxVal)) {
-                const originalClient = clients[idxVal];
-                fetch(APPS_SCRIPT_URL, {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    action: 'editClient',
-                    data: {
-                      originalName: originalClient[0],
-                      name: document.getElementById('editClientName').value.trim(),
-                      industry: document.getElementById('editClientIndustry').value.trim(),
-                      location: document.getElementById('editClientLocation').value.trim(),
-                      serviceArea: input.value.trim(),
-                      lat: originalClient[4][0],
-                      lng: originalClient[4][1]
-                    }
-                  })
-                }).then(r=>r.json()).then(res=>{
-                  if (res.success) setPreviewStatus(statusEl, `✓ Saved to database`);
-                }).catch(()=>{});
-              }
-            } catch(_) {}
+          const statusEl = (contextKey === 'edit') ? document.getElementById('previewEditStatus') : document.getElementById('previewNewStatus');
+          const added = appendEntryToInput(input, result.label || attempt, statusEl);
+          if (added) {
+            dedupeServiceAreaInput(input);
+            setPreviewStatus(statusEl, `Added ${result.label || attempt} to Service Area`);
+            if (contextKey === 'edit') {
+              try {
+                const idxVal = parseInt(document.getElementById('clientToEdit').value);
+                if (!isNaN(idxVal)) {
+                  const originalClient = clients[idxVal];
+                  fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      action: 'editClient',
+                      data: {
+                        originalName: originalClient[0],
+                        name: document.getElementById('editClientName').value.trim(),
+                        industry: document.getElementById('editClientIndustry').value.trim(),
+                        location: document.getElementById('editClientLocation').value.trim(),
+                        serviceArea: input.value.trim(),
+                        lat: originalClient[4][0],
+                        lng: originalClient[4][1]
+                      }
+                    })
+                  }).then(r=>r.json()).then(res=>{
+                    if (res.success) setPreviewStatus(statusEl, `✓ Saved to database`);
+                  }).catch(()=>{});
+                }
+              } catch(_) {}
+            }
           }
         });
       } catch(_) {}
@@ -615,17 +623,20 @@ async function setupServiceAreaOnClick(marker, client) {
   }
   if (!window.__serviceAreaLayers) window.__serviceAreaLayers = {};
 
+  // Attach click handler (fresh each time)
   marker.on('click', async () => {
     console.log(`[SA] Click handler fired for ${name}`);
     const existing = window.__serviceAreaLayers[name];
     if (existing) {
       try { map.removeLayer(existing); } catch(_) {}
       try { existing.remove(); } catch(_) {}
+      try { existing.clearLayers(); } catch(_) {}
       delete window.__serviceAreaLayers[name];
       console.log(`[SA-TOGGLE] Removed service area for ${name}`);
-      return;
+      return; // Exit early after toggle off
     }
 
+    // Show areas
     const group = L.layerGroup().addTo(map);
     const features = [];
     const labels = [];
@@ -998,6 +1009,12 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
     document.getElementById("saveEditBtn").disabled = true;
     document.getElementById("previewEditAreaBtn").disabled = true;
     document.getElementById("addEditAreaBtn").disabled = true;
+    // Clear any existing preview or service area visualization
+    clearPreviewLayer();
+    if (window.__editServiceAreaLayer) {
+      try { map.removeLayer(window.__editServiceAreaLayer); } catch(_) {}
+      window.__editServiceAreaLayer = null;
+    }
     return;
   }
   
@@ -1016,6 +1033,70 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
   document.getElementById("addEditAreaBtn").disabled = false;
   document.getElementById("toggleEditAreaEdit").disabled = false;
   document.getElementById("areaSearchEdit").disabled = false;
+  
+  // Show existing service areas on the map
+  (async () => {
+    clearPreviewLayer();
+    if (window.__editServiceAreaLayer) {
+      try { map.removeLayer(window.__editServiceAreaLayer); } catch(_) {}
+    }
+    const serviceArea = client[3] || "";
+    if (!serviceArea) return;
+    const entries = [...new Set(normalizeServiceAreaInput(serviceArea))].slice(0, 12);
+    if (entries.length === 0) return;
+    
+    const group = L.layerGroup().addTo(map);
+    const features = [];
+    const labels = [];
+    for (const e of entries) {
+      try {
+        const result = await fetchPolygonForEntry(e);
+        if (!result) continue;
+        features.push(result.feature);
+        labels.push(result.label);
+      } catch(_) {}
+    }
+    if (features.length === 0) return;
+    
+    // Render union
+    let unionFeat = features[0];
+    if (typeof turf !== 'undefined') {
+      try {
+        for (let i=1;i<features.length;i++) {
+          const u = turf.union(unionFeat, features[i]);
+          if (u) unionFeat = u;
+        }
+      } catch(_) {}
+    }
+    try {
+      L.geoJSON(unionFeat, { style: { color: '#f39c12', weight: 2, fillColor: '#f39c12', fillOpacity: 0.15 }, interactive: false, pane: 'serviceAreaPane' }).addTo(group);
+    } catch(_) {}
+    
+    // Add pins and tooltips
+    const pinIcon = L.icon({ iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIzNiIgdmlld0JveD0iMCAwIDI0IDM2Ij48ZGVmcz48ZmlsdGVyIGlkPSJzaGFkb3ciPjxmZUdhdXNzaWFuQmx1ciBpbj0iU291cmNlQWxwaGEiIHN0ZERldmlhdGlvbj0iMiIvPjxmZU9mZnNldCBkeD0iMCIgZHk9IjIiIHJlc3VsdD0ib2Zmc2V0Ymx1ciIvPjxmZUZsb29kIGZsb29kLWNvbG9yPSIjMDAwIiBmbG9vZC1vcGFjaXR5PSIwLjMiLz48ZmVDb21wb3NpdGUgaW4yPSJvZmZzZXRibHVyIiBvcGVyYXRvcj0iaW4iLz48ZmVNZXJnZT48ZmVNZXJnZU5vZGUvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT48L2ZpbHRlcj48L2RlZnM+PGcgZmlsdGVyPSJ1cmwoI3NoYWRvdykiPjxwYXRoIGZpbGw9IiNmMzljMTIiIGQ9Ik0xMiAwQzUuNCAwIDAgNS40IDAgMTJjMCA4IDggMTYgMTIgMjQgNC04IDEyLTE2IDEyLTI0IDAtNi42LTUuNC0xMi0xMi0xMnptMCAxNmMtMi4yIDAtNC0xLjgtNC00czEuOC00IDQtNCA0IDEuOCA0IDQtMS44IDQtNCA0eiIvPjwvZz48L3N2Zz4=', iconSize: [24, 36], iconAnchor: [12, 36], popupAnchor: [0, -36] });
+    for (let i=0; i<features.length; i++) {
+      const feat = features[i];
+      let lat = null, lon = null;
+      try {
+        if (typeof turf !== 'undefined' && turf.center) {
+          const center = turf.center(feat);
+          if (center?.geometry?.coordinates) { [lon, lat] = center.geometry.coordinates; }
+        }
+      } catch(_) {}
+      if (!lat || !lon) {
+        try {
+          const bbox = turf.bbox ? turf.bbox(feat) : null;
+          if (bbox) { lon = (bbox[0]+bbox[2])/2; lat = (bbox[1]+bbox[3])/2; }
+        } catch(_) {}
+      }
+      if (lat && lon) {
+        L.marker([lat, lon], { icon: pinIcon, interactive: false }).addTo(group).bindTooltip(labels[i], { permanent: false, direction: 'top' });
+      }
+    }
+    
+    window.__editServiceAreaLayer = group;
+    try { map.fitBounds(group.getBounds(), { padding: [50, 50] }); } catch(_) {}
+  })();
 });
 
 // Preview/add service area on Edit Client form
@@ -1034,8 +1115,11 @@ if (previewEditBtn && addEditBtn) {
     const statusEl = document.getElementById("previewEditStatus");
     const entry = (lastPreviewEntry.edit || input.value.trim());
     if (!entry) { setPreviewStatus(statusEl, 'Nothing to add'); return; }
-    appendEntryToInput(input, entry);
-    setPreviewStatus(statusEl, `Added ${entry} to Service Area`);
+    const added = appendEntryToInput(input, entry, statusEl);
+    if (added) {
+      dedupeServiceAreaInput(input);
+      setPreviewStatus(statusEl, `Added ${entry} to Service Area`);
+    }
   });
 }
 
