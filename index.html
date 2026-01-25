@@ -8,21 +8,27 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <!-- LOGIN SCRIPT START -->
 <script>
+  let isAuthenticated = false;
   const password = "yourPassword123"; // change to your password
   if (!sessionStorage.getItem("loggedIn")) {
     const userPass = prompt("Enter password:");
     if (userPass === password) {
       sessionStorage.setItem("loggedIn", "true");
+      isAuthenticated = true;
     } else {
-      document.documentElement.innerHTML = "<h1 style='text-align:center;margin-top:50px;'>Access Denied</h1>";
-      throw new Error("Access Denied");
+      isAuthenticated = false;
     }
+  } else {
+    isAuthenticated = true;
   }
 </script>
 <!-- LOGIN SCRIPT END -->
 <style>
 body { margin:0; font-family: Arial, sans-serif; height:100vh; }
-#container { display:grid; grid-template-columns:360px 1fr; height:100vh; }
+#container { display:grid; grid-template-columns:360px 1fr; height:100vh; display: none; }
+#container.authenticated { display: grid; }
+#accessDenied { display: none; text-align: center; padding: 50px; font-size: 24px; color: #c0392b; }
+#accessDenied.show { display: block; }
 #sidebar { background:#f5f5f5; padding:15px; overflow-y:auto; border-right:1px solid #ccc; display:flex; flex-direction:column; }
 #sidebar input, #sidebar select, #sidebar button { width:100%; padding:8px; margin-bottom:10px; box-sizing:border-box; }
 #sidebar select[multiple] { height:250px; min-height:150px; overflow-y:auto; display:none; }
@@ -111,9 +117,23 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
   </div>
   <div id="map"></div>
 </div>
+<div id="accessDenied">
+  <h1 style="margin-top:50px; color:#c0392b;">Access Denied</h1>
+  <p>Please reload the page and enter the correct password.</p>
+</div>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+  // Check authentication first
+  if (!isAuthenticated) {
+    document.getElementById("container").style.display = "none";
+    document.getElementById("accessDenied").classList.add("show");
+    return;
+  }
+  
+  // Show dashboard if authenticated
+  document.getElementById("container").classList.add("authenticated");
+
 // MAP INIT
 const map = L.map("map").setView([39.5,-98.35],4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
