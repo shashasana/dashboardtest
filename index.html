@@ -8,15 +8,17 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <!-- LOGIN SCRIPT START -->
 <script>
-  const password = "yourPassword123"; // change to your password
-  if (!sessionStorage.getItem("loggedIn")) {
-    const userPass = prompt("Enter password:");
-    if (userPass === password) {
-      sessionStorage.setItem("loggedIn", "true");
-    } else {
-      document.body.innerHTML = "<h1 style='text-align:center;margin-top:50px;'>Access Denied</h1>";
+  document.addEventListener("DOMContentLoaded", () => {
+    const password = "yourPassword123"; // change to your password
+    if (!sessionStorage.getItem("loggedIn")) {
+      const userPass = prompt("Enter password:");
+      if (userPass === password) {
+        sessionStorage.setItem("loggedIn", "true");
+      } else {
+        document.body.innerHTML = "<h1 style='text-align:center;margin-top:50px;'>Access Denied</h1>";
+      }
     }
-  }
+  });
 </script>
 <!-- LOGIN SCRIPT END -->
 <style>
@@ -261,7 +263,7 @@ function formatLocalTime(offsetSeconds) {
 
 // SETUP POPUP
 async function setupPopup(marker, client) {
-  const [name, inds, loc, coords] = client;
+  const [name, inds, loc, serviceArea, coords] = client;
   marker.bindPopup(`<b>${name}</b><br>Loading…`);
   const update = async () => {
     const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
@@ -278,7 +280,7 @@ function loadMarkers(data) {
   markers=[];
   filteredClients = data;
   data.forEach(item=>{
-    const [_, inds, __, coords] = item;
+    const [_, inds, __, ___, coords] = item;
     const mk = L.circleMarker(coords,{ radius:8, fillColor: colors[inds.split(",")[0].trim()]||"#666", color:"#000", weight:1, fillOpacity:0.9 }).addTo(map);
     mk.industries = inds.split(",").map(i=>i.trim());
     if(mk.industries.some(i=>legendStatus[i])) map.removeLayer(mk);
