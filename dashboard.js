@@ -577,7 +577,10 @@ async function setupServiceAreaOnClick(marker, client) {
             } catch(_) {}
           }
         }
-        L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE }).addTo(group);
+        try {
+          L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE }).addTo(group);
+          console.log('[SA-RENDER] Union polygon added to map');
+        } catch(err) { console.error('[SA-RENDER] Error adding union:', err); }
         
         // Add blue pin icons with shadow at each entry center
         const pinIcon = L.icon({
@@ -613,7 +616,19 @@ async function setupServiceAreaOnClick(marker, client) {
           }
         }
 
+        // Add dashed boundary lines for each ZIP
+        try {
+          for (const { feature, label } of results) {
+            // Render dashed outline for each ZIP boundary
+            L.geoJSON(feature, { 
+              style: { color:'#333', weight:2, dashArray:'5 5', fillOpacity:0, interactive:true },
+              interactive: true 
+            }).addTo(group).bindTooltip(label, { permanent:false, direction:'center' });
+          }
+        } catch(err) { console.error('[SA-BOUNDARIES] Error:', err); }
+
         window.__serviceAreaLayers[name] = group;
+        console.log('[SA-COMPLETE] Service area rendered and cached for', name);
       } catch(clickErr) {
         console.error(`[SA-CLICK] Error in click handler for ${name}:`, clickErr);
         console.error(clickErr.stack);

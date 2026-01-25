@@ -588,9 +588,12 @@ async function setupServiceAreaOnClick(marker, client) {
           const u = turf.union(unionFeat, features[i]);
           if (u) unionFeat = u;
         }
-      } catch(_) {}
+      } catch(err) { console.error('[SA-UNION] Error:', err); }
     }
-    L.geoJSON(unionFeat, { style: SERVICE_AREA_STYLE }).addTo(group);
+    try {
+      L.geoJSON(unionFeat, { style: SERVICE_AREA_STYLE }).addTo(group);
+      console.log('[SA-RENDER] Union polygon added to map');
+    } catch(err) { console.error('[SA-RENDER] Error adding union:', err); }
 
         // Add a blue pin icon with shadow at each entry center
         const pinIcon = L.icon({
@@ -622,11 +625,13 @@ async function setupServiceAreaOnClick(marker, client) {
         }
 
     // Add invisible hover layers for per-entry tooltips
-    features.forEach((f, idx) => {
-      L.geoJSON(f, { style: { color:'#0000', weight:0, fillOpacity:0, interactive:true } })
-        .addTo(group)
-        .bindTooltip(labels[idx], { permanent:false, direction:'center' });
-    });
+    try {
+      features.forEach((f, idx) => {
+        L.geoJSON(f, { style: { color:'#0000', weight:0, fillOpacity:0, interactive:true } })
+          .addTo(group)
+          .bindTooltip(labels[idx], { permanent:false, direction:'center' });
+      });
+    } catch(err) { console.error('[SA-TOOLTIPS] Error:', err); }
 
     // Draw dashed overlays for overlaps
     if (typeof turf !== 'undefined') {
@@ -641,6 +646,8 @@ async function setupServiceAreaOnClick(marker, client) {
     }
 
     window.__serviceAreaLayers[name] = group;
+    console.log('[SA-COMPLETE] Service area rendered and cached for', name);
+    try { map.fitBounds(group.getBounds(), { padding: [50, 50] }); } catch(e) { console.error('[SA-FITBOUNDS]', e); }
   });
 }
 
