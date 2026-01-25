@@ -191,17 +191,17 @@ let markers = [], chart=null, currentChartType="bar";
 // WEATHER
 async function fetchWeather(lat, lng) {
   try {
-    const apiKey = process.env.OPENWEATHER_API_KEY;
-    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`);
+    const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`); // call serverless API
     const d = await res.json();
     return {
       temp: d?.main?.temp !== undefined ? d.main.temp.toFixed(1) : "N/A",
       tzOffset: typeof d?.timezone === "number" ? d.timezone : 0
     };
-  } catch(e){
+  } catch(e) {
     return { temp:"N/A", tzOffset:0 };
   }
 }
+
 
 function formatLocalTime(offsetSeconds) {
   const utc = new Date().getTime() + new Date().getTimezoneOffset()*60000;
