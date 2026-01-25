@@ -1,0 +1,11 @@
+{
+  "name": "client-dashboard",
+  "version": "1.0.0",
+  "description": "Client Industry Dashboard",
+  "main": "index.html",
+  "scripts": {
+    "start": "vercel dev"
+  },
+  "author": "Your Name",
+  "license": "MIT"
+}
