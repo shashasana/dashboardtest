@@ -1,7 +1,10 @@
 // MAP INIT
+console.log('[DASHBOARD] Script loaded, waiting for DOMContentLoaded...');
 document.addEventListener("DOMContentLoaded", () => {
+console.log('[DASHBOARD] DOMContentLoaded fired, initializing map...');
 const map = L.map("map").setView([39.5,-98.35],4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
+console.log('[DASHBOARD] Map initialized successfully');
 
 // STATE
 let clients = [];
@@ -20,7 +23,7 @@ const colors = {
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
 
 // APPS SCRIPT ENDPOINT - UPDATE THIS AFTER DEPLOYING
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqMgpk3yhk3-9O-x9qjw7IlafGdm8ZI-Wznch0sY8MWH_mii_Y7MxtsM-lS-Wfv2S3/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7MUHb_Ee8H_Qajwc4OEh4-U5ZLtIDU0m9Je2N9yzJHYPwmitnhzJ5Z08e3gVcfcKX/exec";
 
 // PARSE CSV
 function parseCSV(text) {
@@ -177,6 +180,18 @@ let markers = [], chart=null, currentChartType="bar";
   
   try {
     clients = await fetchClientsFromSheet();
+    // Localhost-only demo: inject service areas for preview without sheet changes
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      try {
+        const demo = "49501, 49503, Grand Rapids, MI";
+        clients = clients.map(c => {
+          if ((c[0]||"").toLowerCase().includes("north shore brick")) {
+            c[3] = c[3] && c[3].trim().length ? c[3] : demo;
+          }
+          return c;
+        });
+      } catch(_) {}
+    }
     if(clients.length === 0) {
       loadingDiv.innerHTML = "❌ No clients loaded.";
       return;
@@ -197,7 +212,7 @@ async function fetchWeather(lat, lng) {
     const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`); // call serverless API
     const d = await res.json();
     return {
-      temp: d?.main?.temp !== undefined ? d.main.temp.toFixed(1) : "N/A",
+      temp: typeof d?.main?.temp === "number" ? d.main.temp.toFixed(1) : "N/A",
       tzOffset: typeof d?.timezone === "number" ? d.timezone : 0
     };
   } catch(e) {
@@ -218,26 +233,61 @@ function formatLocalTime(offsetSeconds) {
 
 // POPUP
 async function setupPopup(marker, client) {
-  const [name, inds, loc, serviceArea, coords] = client;
-  marker.bindPopup(`<b>${name}</b><br>Loading…`);
-  const update = async () => {
-    const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
-    const timeStr = formatLocalTime(tzOffset);
-    marker.getPopup().setContent(
-      `<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Time: ${timeStr}<br>Temp: ${temp}°C`
-    );
-  };
-  await update();
-  setInterval(update, 10*60*1000);
+  try {
+    const [name, inds, loc, serviceArea, coords] = client;
+    console.log(`[POPUP-SETUP] Setting up popup for: ${name}`);
+    marker.bindPopup(`<b>${name}</b><br>Loading…`);
+    const update = async () => {
+      try {
+        const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
+        const timeStr = formatLocalTime(tzOffset);
+        marker.getPopup().setContent(
+          `<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Time: ${timeStr}<br>Temp: ${temp}°C`
+        );
+      } catch(weatherErr) {
+        console.error(`[POPUP] Weather fetch error for ${name}:`, weatherErr);
+      }
+    };
+    await update();
+    setInterval(update, 10*60*1000);
+
+    // Show popup on hover; click will toggle service-area polygons
+    marker.on('mouseover', () => {
+      try { 
+        console.log(`[POPUP-HOVER] Mouse over: ${name}`);
+        marker.openPopup(); 
+      } catch(hoverErr) {
+        console.error(`[POPUP-HOVER] Error:`, hoverErr);
+      }
+    });
+    marker.on('mouseout', () => {
+      try { 
+        console.log(`[POPUP-HOVER] Mouse out: ${name}`);
+        marker.closePopup(); 
+      } catch(outErr) {
+        console.error(`[POPUP-HOVER] Error on mouseout:`, outErr);
+      }
+    });
+  } catch(setupErr) {
+    console.error(`[POPUP-SETUP] Error setting up popup for ${client[0]}:`, setupErr);
+    console.error(setupErr.stack);
+  }
 }
 
 // MARKERS
 function loadMarkers(data) {
+  console.log(`[MARKERS] loadMarkers called with ${data.length} clients`);
   markers.forEach(m=>map.removeLayer(m));
   markers=[];
   filteredClients = data; // Track filtered data for chart
+  // Clear any previously rendered service area layers
+  if (window.__serviceAreaLayers) {
+    Object.values(window.__serviceAreaLayers).forEach(lg => { try { lg.remove(); } catch(_){} });
+    window.__serviceAreaLayers = {};
+  }
   data.forEach(item=>{
-    const [_, inds, __, ___, coords] = item;
+    const [name, inds, __, ___, coords] = item;
+    console.log(`[MARKERS] Setting up marker for: ${name}`);
     const mk = L.circleMarker(coords,{
       radius:8, fillColor: colors[inds.split(",")[0].trim()]||"#666",
       color:"#000", weight:1, fillOpacity:0.9
@@ -245,9 +295,316 @@ function loadMarkers(data) {
     mk.industries = inds.split(",").map(i=>i.trim());
     if(mk.industries.some(i=>legendStatus[i])) map.removeLayer(mk);
     setupPopup(mk, item);
+    setupServiceAreaOnClick(mk, item);
     markers.push(mk);
   });
   updateChart(data);
+}
+
+// --- Service Area (ZIP/Location) Polygons ---
+const SERVICE_AREA_STYLE = {
+  color: '#e74c3c',
+  weight: 2,
+  fillColor: '#e74c3c',
+  fillOpacity: 0.25
+};
+const OVERLAP_STYLE = {
+  color: '#e74c3c',
+  weight: 2,
+  dashArray: '4 4',
+  fillColor: '#e74c3c',
+  fillOpacity: 0.25
+};
+
+function getServiceAreaCache() {
+  try { return JSON.parse(localStorage.getItem('serviceAreaCache')||'{}'); } catch(_) { return {}; }
+}
+function setServiceAreaCache(cache) {
+  try { localStorage.setItem('serviceAreaCache', JSON.stringify(cache)); } catch(_) {}
+}
+
+// --- Service area preview helpers ---
+let previewLayer = null;
+const lastPreviewEntry = { add: null, edit: null };
+
+function clearPreviewLayer() {
+  if (previewLayer) {
+    try { map.removeLayer(previewLayer); } catch(_) {}
+    previewLayer = null;
+  }
+}
+
+function appendEntryToInput(inputEl, entry) {
+  const parts = inputEl.value.split(',').map(p => p.trim()).filter(Boolean);
+  if (!parts.includes(entry)) parts.push(entry);
+  inputEl.value = parts.join(', ');
+}
+
+function setPreviewStatus(el, msg) {
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+async function previewServiceAreaEntry(entry, statusEl, contextKey) {
+  if (!entry) {
+    setPreviewStatus(statusEl, 'Enter a ZIP or place');
+    return null;
+  }
+  setPreviewStatus(statusEl, 'Searching…');
+  clearPreviewLayer();
+  try {
+    const result = await fetchPolygonForEntry(entry);
+    if (!result || !result.feature) {
+      setPreviewStatus(statusEl, 'No polygon found');
+      return null;
+    }
+    previewLayer = L.geoJSON(result.feature, { style: SERVICE_AREA_STYLE }).addTo(map);
+    try { map.fitBounds(previewLayer.getBounds(), { padding: [20, 20] }); } catch(_) {}
+    setPreviewStatus(statusEl, `Previewing: ${result.label || entry}`);
+    lastPreviewEntry[contextKey] = entry;
+    return result;
+  } catch(err) {
+    setPreviewStatus(statusEl, `Error: ${err.message || err}`);
+    return null;
+  }
+}
+
+function normalizeServiceAreaInput(str) {
+  if (!str) return [];
+  const lines = str.split('\n').map(s=>s.trim()).filter(Boolean);
+  const entries = [];
+  for (const line of lines) {
+    const tokens = line.split(',').map(t=>t.trim()).filter(Boolean);
+    const zips = tokens.filter(isZip);
+    const nonZipTokens = tokens.filter(t=>!isZip(t));
+    if (zips.length > 0) {
+      entries.push(...zips);
+    }
+    if (nonZipTokens.length > 0) {
+      entries.push(nonZipTokens.join(', '));
+    }
+    if (tokens.length === 0) {
+      entries.push(line);
+    }
+  }
+  return entries;
+}
+function createSquareFeature(lon, lat, kmRadius=5) {
+  // Approximate a square around the point; 1 deg lat ≈ 111 km
+  const dLat = kmRadius / 111;
+  const dLon = kmRadius / (111 * Math.cos(lat * Math.PI/180) || 1);
+  const coords = [
+    [lon - dLon, lat - dLat],
+    [lon + dLon, lat - dLat],
+    [lon + dLon, lat + dLat],
+    [lon - dLon, lat + dLat],
+    [lon - dLon, lat - dLat]
+  ];
+  return { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{} };
+}
+function isZip(s) { return /^\d{5}$/.test(s); }
+
+async function fetchPolygonForEntry(entry) {
+  const cache = getServiceAreaCache();
+  if (cache[entry]) {
+    const c = cache[entry];
+    console.log(`[POLY-FETCH] Using cached entry: ${entry}`);
+    if (c.feature) {
+      return { feature: c.feature, label: c.label || entry };
+    }
+  }
+  
+  // Fetch from backend (Google Apps Script handles Nominatim lookup)
+  const url = `${APPS_SCRIPT_URL}?action=getPolygon&entry=${encodeURIComponent(entry)}`;
+  console.log(`[POLY-FETCH] Backend URL for ${entry}: ${url}`);
+  
+  try {
+    await new Promise(r=>setTimeout(r, 100)); // Small delay
+    const res = await fetch(url);
+    const data = await res.json();
+    console.log(`[POLY-FETCH] Backend response for ${entry}:`, data);
+    
+    if (data.feature && data.label) {
+      cache[entry] = { feature: data.feature, label: data.label };
+      setServiceAreaCache(cache);
+      return { feature: data.feature, label: data.label };
+    } else if (data.error) {
+      console.error(`[POLY-FETCH] Backend error for ${entry}:`, data.error);
+    }
+  } catch(err) {
+    console.error(`[POLY-FETCH] Fetch error for ${entry}:`, err);
+  }
+
+  // Fallback: Overpass API for postal_code boundaries
+  if (isZip(entry)) {
+    console.log(`[POLY-FETCH] Trying Overpass for ZIP: ${entry}`);
+    await new Promise(r=>setTimeout(r, 500));
+    try {
+      const overpassQuery = `[out:json][timeout:10];(relation["postal_code"="${entry}"]["boundary"="postal_code"];way["postal_code"="${entry}"]["boundary"="postal_code"];);out geom;`;
+      const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
+      const overpassRes = await fetch(overpassUrl);
+      const overpassData = await overpassRes.json();
+      if (overpassData.elements && overpassData.elements.length > 0 && typeof osmtogeojson !== 'undefined') {
+        const geoJSON = osmtogeojson(overpassData);
+        if (geoJSON.features && geoJSON.features.length > 0) {
+          const feature = geoJSON.features[0];
+          const cityName = overpassData.elements[0]?.tags?.name || overpassData.elements[0]?.tags?.['addr:city'] || '';
+          const label = cityName ? `${cityName} ${entry}` : entry;
+          cache[entry] = { feature, label };
+          setServiceAreaCache(cache);
+          console.log(`[POLY-FETCH] Cached Overpass polygon for: ${entry}`);
+          return { feature, label };
+        }
+      }
+    } catch(err) {
+      console.error(`[POLY-FETCH] Overpass error for ${entry}:`, err);
+    }
+  }
+
+  // Final fallback: US Census TIGER for ZCTA polygons
+  if (isZip(entry)) {
+    console.log(`[POLY-FETCH] Trying Census TIGER for ZIP: ${entry}`);
+    await new Promise(r=>setTimeout(r, 500));
+    try {
+      const censusUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/2/query?where=ZCTA5='${entry}'&outFields=*&outSR=4326&f=geojson`;
+      console.log(`[POLY-FETCH] Census URL: ${censusUrl}`);
+      const censusRes = await fetch(censusUrl);
+      console.log(`[POLY-FETCH] Census HTTP status: ${censusRes.status}`);
+      const censusData = await censusRes.json();
+      console.log(`[POLY-FETCH] Census response:`, censusData);
+      if (censusData.features && censusData.features.length > 0) {
+        const feature = censusData.features[0];
+        const label = entry; // Use ZIP as label for Census data
+        cache[entry] = { feature, label };
+        setServiceAreaCache(cache);
+        console.log(`[POLY-FETCH] Cached Census TIGER polygon for: ${entry}`);
+        return { feature, label };
+      }
+    } catch(err) {
+      console.error(`[POLY-FETCH] Census TIGER error for ${entry}:`, err);
+    }
+  }
+
+  console.log(`[POLY-FETCH] No polygon found for: ${entry}`);
+  return null;
+}
+
+function buildLabel(entry, item) {
+  // Format: "City ST ZIP" or just "ZIP" if no city found
+  try {
+    if (isZip(entry)) {
+      const disp = (item?.display_name||'').split(',').map(s=>s.trim());
+      // Filter out the ZIP itself from display_name parts
+      const parts = disp.filter(p => p !== entry && !/^\d{5}$/.test(p));
+      const city = parts[0] || '';
+      const state = parts.find(v=>/\b[A-Z]{2}\b/.test(v)) || '';
+      // Build clean label without duplicating ZIP
+      if (city && state) {
+        return `${city} ${state} ${entry}`;
+      } else if (city) {
+        return `${city} ${entry}`;
+      } else {
+        return entry; // Just ZIP if no city found
+      }
+    } else {
+      return entry; // keep user-provided for locations
+    }
+  } catch(_) { return entry; }
+}
+
+async function setupServiceAreaOnClick(marker, client) {
+  try {
+    const [name, inds, loc, serviceArea, coords] = client;
+    console.log(`[SA-SETUP] Attaching for: ${name}, serviceArea: "${serviceArea}"`);
+    const entries = normalizeServiceAreaInput(serviceArea);
+    console.log(`[SA-SETUP] Normalized to:`, entries);
+    if (entries.length === 0) {
+      console.log(`[SA-SETUP] No entries, skipping click handler for ${name}`);
+      return;
+    }
+    if (!window.__serviceAreaLayers) window.__serviceAreaLayers = {};
+    marker.on('click', async () => {
+      try {
+        console.log(`[SA-CLICK] Marker clicked: ${name}`);
+    const existing = window.__serviceAreaLayers[name];
+    if (existing) { try { existing.remove(); } catch(_){} delete window.__serviceAreaLayers[name]; return; }
+    const group = L.layerGroup().addTo(map);
+    const results = [];
+    for (const e of entries) {
+      const result = await fetchPolygonForEntry(e);
+      if (!result || !result.feature) continue;
+      results.push(result);
+    }
+    if (results.length === 0) {
+      // Fallback: render a small area around the client's location
+      try {
+        const lat = coords[0], lon = coords[1];
+        let feature = null;
+        if (typeof turf !== 'undefined' && turf.circle) {
+          feature = turf.circle([lon, lat], 5, { steps:64, units:'kilometers' });
+        } else {
+          feature = createSquareFeature(lon, lat, 5);
+        }
+        L.geoJSON(feature, { style: SERVICE_AREA_STYLE }).addTo(group).bindTooltip('Location area', { permanent:false, direction:'center' });
+      } catch(_) {}
+      window.__serviceAreaLayers[name] = group; return;
+    }
+    // Union all features for a clean solid polygon
+    let unionFeature = results[0].feature;
+    if (typeof turf !== 'undefined' && turf.union) {
+      for (let i=1;i<results.length;i++) {
+        try {
+          const u = turf.union(unionFeature, results[i].feature);
+          if (u) unionFeature = u;
+        } catch(_) {}
+      }
+    }
+    L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE }).addTo(group);
+    
+    // Add blue pin icons with shadow at each entry center
+    const pinIcon = L.icon({
+      iconUrl: 'data:image/svg+xml;base64,' + btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="36" viewBox="0 0 24 36"><defs><filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feOffset dx="0" dy="2" result="offsetblur"/><feComponentTransfer><feFuncA type="linear" slope="0.5"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M12 0C7.03 0 3 4.03 3 9c0 6.75 9 18 9 18s9-11.25 9-18c0-4.97-4.03-9-9-9z" fill="#3498db" filter="url(#shadow)"/><circle cx="12" cy="9" r="3" fill="white"/></svg>`),
+      iconSize: [24, 36],
+      iconAnchor: [12, 36],
+      popupAnchor: [0, -36]
+    });
+    for (const { feature, label } of results) {
+      if (typeof turf !== 'undefined' && turf.center) {
+        const center = turf.center(feature);
+        const [lng, lat] = center.geometry.coordinates;
+        L.marker([lat, lng], { icon: pinIcon }).addTo(group);
+      }
+    }
+    
+    // Invisible interactive layers per entry for hover tooltips
+    for (const { feature, label } of results) {
+      const invisible = L.geoJSON(feature, { style: { opacity:0, fillOpacity:0 }, interactive:true });
+      invisible.addTo(group).bindTooltip(label, { permanent:false, direction:'center' });
+    }
+    // Dashed overlaps between entries only where they intersect
+    if (typeof turf !== 'undefined' && turf.intersect) {
+      for (let i=0;i<results.length;i++) {
+        for (let j=i+1;j<results.length;j++) {
+          try {
+            const overlap = turf.intersect(results[i].feature, results[j].feature);
+            if (overlap) {
+              L.geoJSON(overlap, { style: OVERLAP_STYLE }).addTo(group);
+            }
+          } catch(_) {}
+        }
+      }
+      } catch(clickErr) {
+        console.error(`[SA-CLICK] Error in click handler for ${name}:`, clickErr);
+        console.error(clickErr.stack);
+      }
+    });
+  } catch(setupErr) {
+    console.error(`[SA-SETUP] Error setting up service area click for ${name}:`, setupErr);
+    console.error(setupErr.stack);
+  }
+    window.__serviceAreaLayers[name] = group;
+  });
 }
 
 // CHART
@@ -355,6 +712,24 @@ async function geocodeAndValidate(location) {
     statusDiv.innerHTML = "⚠️ Error: " + e.message;
     return null;
   }
+}
+
+// Preview/add service area on Add Client form
+const previewNewBtn = document.getElementById("previewNewAreaBtn");
+const addNewBtn = document.getElementById("addNewAreaBtn");
+if (previewNewBtn && addNewBtn) {
+  previewNewBtn.addEventListener("click", async () => {
+    const entry = document.getElementById("newClientServiceArea").value.trim();
+    await previewServiceAreaEntry(entry, document.getElementById("previewNewStatus"), 'add');
+  });
+  addNewBtn.addEventListener("click", () => {
+    const input = document.getElementById("newClientServiceArea");
+    const statusEl = document.getElementById("previewNewStatus");
+    const entry = (lastPreviewEntry.add || input.value.trim());
+    if (!entry) { setPreviewStatus(statusEl, 'Nothing to add'); return; }
+    appendEntryToInput(input, entry);
+    setPreviewStatus(statusEl, `Added ${entry} to Service Area`);
+  });
 }
 
 document.getElementById("saveClientBtn").addEventListener("click", async () => {

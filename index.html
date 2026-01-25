@@ -6,6 +6,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/osmtogeojson.min.js"></script>
 <!-- LOGIN SCRIPT START -->
 <script>
   let isAuthenticated = false;
@@ -65,6 +67,11 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
       <input type="text" id="newClientIndustry" placeholder="Industry" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
       <input type="text" id="newClientLocation" placeholder="Location (e.g., Austin, TX)" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
       <input type="text" id="newClientServiceArea" placeholder="Service Area" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
+      <div style="display:flex; gap:6px; margin-bottom:8px;">
+        <button id="previewNewAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;">🔍 Preview Area</button>
+        <button id="addNewAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;">➕ Add to Service Area</button>
+      </div>
+      <div id="previewNewStatus" style="margin-bottom:8px; font-size:12px; color:#555; display:none;"></div>
       <button id="saveClientBtn" style="width:100%; padding:8px; background:#27ae60; color:white; border:none; border-radius:3px; cursor:pointer;">Save Client</button>
       <div id="geocodeStatus" style="margin-top:8px; padding:8px; background:#ecf0f1; border-radius:3px; display:none; font-size:12px;"></div>
     </div>
@@ -82,6 +89,11 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
       <input type="text" id="editClientIndustry" placeholder="Industry" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <input type="text" id="editClientLocation" placeholder="Location" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <input type="text" id="editClientServiceArea" placeholder="Service Area" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
+      <div style="display:flex; gap:6px; margin-bottom:8px;">
+        <button id="previewEditAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>🔍 Preview Area</button>
+        <button id="addEditAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>➕ Add to Service Area</button>
+      </div>
+      <div id="previewEditStatus" style="margin-bottom:8px; font-size:12px; color:#555; display:none;"></div>
       <button id="saveEditBtn" style="width:100%; padding:8px; background:#3498db; color:white; border:none; border-radius:3px; cursor:pointer;" disabled>Save Changes</button>
       <div id="editStatus" style="margin-top:8px; padding:8px; background:#ecf0f1; border-radius:3px; display:none; font-size:12px;"></div>
     </div>
@@ -150,7 +162,7 @@ const colors = {
 
 // GOOGLE SHEET CONFIG
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5CStbuCX63MtY3Z4NLXwnbijovY-bCqyUkBek-YrGSZ6CgAA1ZPzAEtVyc5YJLRoo/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx7MUHb_Ee8H_Qajwc4OEh4-U5ZLtIDU0m9Je2N9yzJHYPwmitnhzJ5Z08e3gVcfcKX/exec";
 
 // GEOCODE LOCATION
 async function geocodeLocation(location) {
@@ -251,6 +263,19 @@ let markers = [], chart=null, currentChartType="bar";
 
 (async () => {
   clients = await fetchClientsFromSheet();
+  // Localhost-only demo: inject service areas for preview without sheet changes
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    try {
+      const demo = "49501, 49503, Grand Rapids, MI";
+      clients = clients.map(c => {
+        if ((c[0]||"").toLowerCase().includes("north shore brick")) {
+          // c = [name, industry, location, serviceArea, coords]
+          c[3] = c[3] && c[3].trim().length ? c[3] : demo;
+        }
+        return c;
+      });
+    } catch(_) {}
+  }
   setupFilters();
   buildLegend();
   loadMarkers(clients);
@@ -262,7 +287,7 @@ async function fetchWeather(lat, lng) {
     const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
     const d = await res.json();
     return {
-      temp: d?.main?.temp !== undefined ? d.main.temp.toFixed(1) : "N/A",
+      temp: typeof d?.main?.temp === "number" ? d.main.temp.toFixed(1) : "N/A",
       tzOffset: typeof d?.timezone === "number" ? d.timezone : 0
     };
   } catch(e) {
@@ -292,19 +317,342 @@ async function setupPopup(marker, client) {
   };
   await update();
   setInterval(update, 10*60*1000);
+
+  // Show popup on hover; click is reserved for service-area polygons
+  marker.on('mouseover', () => {
+    try { marker.openPopup(); } catch(_) {}
+  });
+  marker.on('mouseout', () => {
+    try { marker.closePopup(); } catch(_) {}
+  });
+}
+
+// --- Service Area (ZIP/Location) Polygons ---
+const SERVICE_AREA_STYLE = {
+  color: '#e74c3c',
+  weight: 2,
+  fillColor: '#e74c3c',
+  fillOpacity: 0.15  // Reduced from 0.25 to be more transparent
+};
+
+const OVERLAP_STYLE = {
+  color: '#e74c3c',
+  weight: 2,
+  dashArray: '4 4',
+  fillColor: '#e74c3c',
+  fillOpacity: 0.15
+};
+
+function getServiceAreaCache() {
+  try { return JSON.parse(localStorage.getItem('serviceAreaCache')||'{}'); } catch(_) { return {}; }
+}
+function setServiceAreaCache(cache) {
+  try { localStorage.setItem('serviceAreaCache', JSON.stringify(cache)); } catch(_) {}
+}
+
+// --- Service area preview helpers ---
+let previewLayer = null;
+const lastPreviewEntry = { add: null, edit: null };
+
+function clearPreviewLayer() {
+  if (previewLayer) {
+    try { map.removeLayer(previewLayer); } catch(_) {}
+    previewLayer = null;
+  }
+}
+
+function appendEntryToInput(inputEl, entry) {
+  const parts = inputEl.value.split(',').map(p => p.trim()).filter(Boolean);
+  if (!parts.includes(entry)) parts.push(entry);
+  inputEl.value = parts.join(', ');
+}
+
+function setPreviewStatus(el, msg) {
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+async function previewServiceAreaEntry(entry, statusEl, contextKey) {
+  if (!entry) {
+    setPreviewStatus(statusEl, 'Enter a ZIP or place');
+    return null;
+  }
+  setPreviewStatus(statusEl, 'Searching…');
+  clearPreviewLayer();
+  try {
+    const result = await fetchPolygonForEntry(entry);
+    if (!result || !result.feature) {
+      setPreviewStatus(statusEl, 'No polygon found');
+      return null;
+    }
+    previewLayer = L.geoJSON(result.feature, { style: SERVICE_AREA_STYLE }).addTo(map);
+    try { map.fitBounds(previewLayer.getBounds(), { padding: [20, 20] }); } catch(_) {}
+    setPreviewStatus(statusEl, `Previewing: ${result.label || entry}`);
+    lastPreviewEntry[contextKey] = entry;
+    return result;
+  } catch(err) {
+    setPreviewStatus(statusEl, `Error: ${err.message || err}`);
+    return null;
+  }
+}
+
+function normalizeServiceAreaInput(str) {
+  if (!str) return [];
+  const lines = str.replace(/\r\n/g,'\n').split(/\n/).map(s=>s.trim()).filter(Boolean);
+  const out = [];
+  for (const line of lines) {
+    // Split by comma first
+    const tokens = line.split(',').map(t=>t.trim()).filter(Boolean);
+    // Separate ZIPs from city/state
+    const zips = tokens.filter(isZip);
+    const nonZips = tokens.filter(t=>!isZip(t));
+    
+    // Add each ZIP separately
+    zips.forEach(z => out.push(z));
+    
+    // Add non-ZIP tokens as separate entries or join them
+    if (nonZips.length > 0) {
+      out.push(nonZips.join(', '));
+    }
+  }
+  return out;
+}
+
+function isZip(s) { return /^\d{5}$/.test(s); }
+
+async function fetchPolygonForEntry(entry) {
+  // Returns { feature, label } where feature is a GeoJSON Feature (Polygon/MultiPolygon)
+  const cache = getServiceAreaCache();
+  if (cache[entry]) {
+    const c = cache[entry];
+    if (c.type === 'feature') {
+      return { feature: c.feature, label: c.label || entry };
+    }
+  }
+
+  // Fetch from backend (Google Apps Script handles Nominatim lookup)
+  const url = `${APPS_SCRIPT_URL}?action=getPolygon&entry=${encodeURIComponent(entry)}`;
+  console.log(`[POLY-FETCH] Backend URL for ${entry}: ${url}`);
+  
+  try {
+    await new Promise(r=>setTimeout(r, 100)); // Small delay to avoid overwhelming backend
+    const res = await fetch(url);
+    const data = await res.json();
+    console.log(`[POLY-FETCH] Backend response for ${entry}:`, data);
+    
+    if (data.feature && data.label) {
+      cache[entry] = { type:'feature', feature: data.feature, label: data.label };
+      setServiceAreaCache(cache);
+      return { feature: data.feature, label: data.label };
+    } else if (data.error) {
+      console.error(`[POLY-FETCH] Backend error for ${entry}:`, data.error);
+    }
+  } catch(err) {
+    console.error(`[POLY-FETCH] Fetch error for ${entry}:`, err);
+  }
+
+  // Overpass fallback: fetch polygon for postal_code
+  if (isZip(entry)) {
+    try {
+      const overpassQuery = `data=[out:json][timeout:10];(relation["boundary"="administrative"]["postal_code"="${entry}"];relation["boundary"="postal_code"]["postal_code"="${entry}"];way["postal_code"="${entry}"];);out body;>;out skel qt;`;
+      const overpassUrl = `https://overpass-api.de/api/interpreter?${overpassQuery}`;
+      console.log(`[POLY-FETCH] Overpass URL for ${entry}: ${overpassUrl}`);
+      await new Promise(r=>setTimeout(r, 250));
+      const res = await fetch(overpassUrl, { headers: { 'Accept': 'application/json' } });
+      const data = await res.json();
+      if (data?.elements?.length) {
+        // Convert Overpass result to GeoJSON via simple interpretation
+        const geo = osmtogeojson(data);
+        if (geo?.features?.length) {
+          // Take first polygon/multipolygon feature
+          const poly = geo.features.find(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
+          if (poly) {
+            // Try to get a better label from previous Nominatim attempt
+            let label = entry;
+            if (Array.isArray(data?.elements) && data.elements.length > 0) {
+              const tags = data.elements[0].tags;
+              if (tags?.name) label = `${tags.name} ${entry}`;
+            }
+            const feature = { type:'Feature', geometry: poly.geometry, properties:{ label } };
+            cache[entry] = { type:'feature', feature, label };
+            setServiceAreaCache(cache);
+            console.log(`[POLY-FETCH] Using Overpass polygon for ${entry}`);
+            return { feature, label };
+          }
+        }
+      }
+    } catch(err) {
+      console.error(`[POLY-FETCH] Overpass error for ${entry}:`, err);
+    }
+
+    // Final fallback: US Census TIGER ZIP boundaries via public API
+    try {
+      const censusUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/2/query?where=ZCTA5='${entry}'&outFields=*&outSR=4326&f=geojson`;
+      console.log(`[POLY-FETCH] Census TIGER URL for ${entry}: ${censusUrl}`);
+      await new Promise(r=>setTimeout(r, 500));
+      const res = await fetch(censusUrl);
+      if (!res.ok) {
+        console.error(`[POLY-FETCH] Census TIGER HTTP ${res.status} for ${entry}`);
+        return null;
+      }
+      const data = await res.json();
+      console.log(`[POLY-FETCH] Census TIGER response:`, data);
+      if (data?.features?.length) {
+        const poly = data.features[0];
+        if (poly.geometry && (poly.geometry.type === 'Polygon' || poly.geometry.type === 'MultiPolygon')) {
+          const label = entry; // ZIP only for Census data
+          const feature = { type:'Feature', geometry: poly.geometry, properties:{ label } };
+          cache[entry] = { type:'feature', feature, label };
+          setServiceAreaCache(cache);
+          console.log(`[POLY-FETCH] Using Census TIGER polygon for ${entry}`);
+          return { feature, label };
+        }
+      }
+    } catch(err) {
+      console.error(`[POLY-FETCH] Census TIGER error for ${entry}:`, err);
+    }
+  }
+  // No polygon geojson available; skip to avoid boxy fallbacks
+  return null;
+}
+
+function buildLabel(entry, item) {
+  // Format: "City ST ZIP" or just "ZIP" if no city found
+  try {
+    if (isZip(entry)) {
+      const disp = (item?.display_name||'').split(',').map(s=>s.trim());
+      // Filter out the ZIP itself from display_name parts
+      const parts = disp.filter(p => p !== entry && !/^\d{5}$/.test(p));
+      const city = parts[0] || '';
+      const state = parts.find(v=>/\b[A-Z]{2}\b/.test(v)) || '';
+      // Build clean label without duplicating ZIP
+      if (city && state) {
+        return `${city} ${state} ${entry}`;
+      } else if (city) {
+        return `${city} ${entry}`;
+      } else {
+        return entry; // Just ZIP if no city found
+      }
+    } else {
+      return entry; // keep user-provided for locations
+    }
+  } catch(_) { return entry; }
+}
+
+async function setupServiceAreaOnClick(marker, client) {
+  const [name, inds, loc, serviceArea /*string*/, coords] = client;
+  console.log(`[SA] Setting up for ${name}, serviceArea: "${serviceArea}"`);
+  const entries = normalizeServiceAreaInput(serviceArea);
+  console.log(`[SA] Normalized entries:`, entries);
+  if (entries.length === 0) {
+    console.log(`[SA] No entries, returning`);
+    return;
+  }
+  if (!window.__serviceAreaLayers) window.__serviceAreaLayers = {};
+
+  marker.on('click', async () => {
+    console.log(`[SA] Click handler fired for ${name}`);
+    const existing = window.__serviceAreaLayers[name];
+    if (existing) { try { existing.remove(); } catch(_){} delete window.__serviceAreaLayers[name]; return; }
+
+    const group = L.layerGroup().addTo(map);
+    const features = [];
+    const labels = [];
+    for (const e of entries) {
+      console.log(`[SA-FETCH] Fetching polygon for: ${e}`);
+      const result = await fetchPolygonForEntry(e);
+      console.log(`[SA-FETCH] Got result:`, result);
+      if (!result) { console.log(`[SA-FETCH] No result for ${e}`); continue; }
+      features.push(result.feature);
+      labels.push(result.label);
+    }
+    console.log(`[SA-RENDER] Got ${features.length}/${entries.length} features`);
+    if (features.length === 0) { window.__serviceAreaLayers[name] = group; return; }
+
+    // Compute union for solid combined polygon
+    let unionFeat = features[0];
+    if (typeof turf !== 'undefined') {
+      try {
+        for (let i=1;i<features.length;i++) {
+          const u = turf.union(unionFeat, features[i]);
+          if (u) unionFeat = u;
+        }
+      } catch(_) {}
+    }
+    L.geoJSON(unionFeat, { style: SERVICE_AREA_STYLE }).addTo(group);
+
+        // Add a blue pin icon with shadow at each entry center
+        const pinIcon = L.icon({
+          iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIzNiIgdmlld0JveD0iMCAwIDI0IDM2Ij48ZGVmcz48ZmlsdGVyIGlkPSJzaGFkb3ciPjxmZUdhdXNzaWFuQmx1ciBpbj0iU291cmNlQWxwaGEiIHN0ZERldmlhdGlvbj0iMiIvPjxmZU9mZnNldCBkeD0iMCIgZHk9IjIiIHJlc3VsdD0ib2Zmc2V0Ymx1ciIvPjxmZUZsb29kIGZsb29kLWNvbG9yPSIjMDAwIiBmbG9vZC1vcGFjaXR5PSIwLjMiLz48ZmVDb21wb3NpdGUgaW4yPSJvZmZzZXRibHVyIiBvcGVyYXRvcj0iaW4iLz48ZmVNZXJnZT48ZmVNZXJnZU5vZGUvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT48L2ZpbHRlcj48L2RlZnM+PGcgZmlsdGVyPSJ1cmwoI3NoYWRvdykiPjxwYXRoIGZpbGw9IiM0MDk2Q0UiIGQ9Ik0xMiAwQzUuNCAwIDAgNS40IDAgMTJjMCA4IDggMTYgMTIgMjQgNC04IDEyLTE2IDEyLTI0IDAtNi42LTUuNC0xMi0xMi0xMnptMCAxNmMtMi4yIDAtNC0xLjgtNC00czEuOC00IDQtNCA0IDEuOCA0IDQtMS44IDQtNCA0eiIvPjwvZz48L3N2Zz4=',
+          iconSize: [24, 36],
+          iconAnchor: [12, 36],
+          popupAnchor: [0, -36]
+        });
+        for (let i=0;i<features.length;i++) {
+          const feat = features[i];
+          let lat = null, lon = null;
+          try {
+            if (typeof turf !== 'undefined' && turf.center) {
+              const center = turf.center(feat);
+              if (center?.geometry?.coordinates) {
+                [lon, lat] = center.geometry.coordinates;
+              }
+            }
+          } catch(_) {}
+          if (!lat || !lon) {
+            try {
+              const bbox = turf.bbox ? turf.bbox(feat) : null;
+              if (bbox) { lon = (bbox[0]+bbox[2])/2; lat = (bbox[1]+bbox[3])/2; }
+            } catch(_) {}
+          }
+          if (lat && lon) {
+            L.marker([lat, lon], { icon: pinIcon, interactive:false }).addTo(group).bindTooltip(labels[i], { permanent:false, direction:'top' });
+          }
+        }
+
+    // Add invisible hover layers for per-entry tooltips
+    features.forEach((f, idx) => {
+      L.geoJSON(f, { style: { color:'#0000', weight:0, fillOpacity:0, interactive:true } })
+        .addTo(group)
+        .bindTooltip(labels[idx], { permanent:false, direction:'center' });
+    });
+
+    // Draw dashed overlays for overlaps
+    if (typeof turf !== 'undefined') {
+      for (let i=0;i<features.length;i++) {
+        for (let j=i+1;j<features.length;j++) {
+          try {
+            const inter = turf.intersect(features[i], features[j]);
+            if (inter) L.geoJSON(inter, { style: OVERLAP_STYLE }).addTo(group);
+          } catch(_) {}
+        }
+      }
+    }
+
+    window.__serviceAreaLayers[name] = group;
+  });
 }
 
 // LOAD MARKERS
 function loadMarkers(data) {
+  console.log(`[LOAD] loadMarkers called with ${data.length} clients`);
   markers.forEach(m=>map.removeLayer(m));
   markers=[];
   filteredClients = data;
+  // Clear any previously rendered service area layers
+  if (window.__serviceAreaLayers) {
+    Object.values(window.__serviceAreaLayers).forEach(lg => { try { lg.remove(); } catch(_){} });
+    window.__serviceAreaLayers = {};
+  }
   data.forEach(item=>{
-    const [_, inds, __, ___, coords] = item;
+    const [name, inds, loc, serviceArea, coords] = item;
+    console.log(`[LOAD] Marker: ${name}, serviceArea="${serviceArea}", coords=${JSON.stringify(coords)}`);
     const mk = L.circleMarker(coords,{ radius:8, fillColor: colors[inds.split(",")[0].trim()]||"#666", color:"#000", weight:1, fillOpacity:0.9 }).addTo(map);
     mk.industries = inds.split(",").map(i=>i.trim());
     if(mk.industries.some(i=>legendStatus[i])) map.removeLayer(mk);
     setupPopup(mk, item);
+    setupServiceAreaOnClick(mk, item);
     markers.push(mk);
   });
   updateChart(data);
@@ -347,6 +695,24 @@ async function geocodeAndValidate(location) {
   statusDiv.innerHTML = "🔍 Geocoding...";
   statusDiv.style.display = "block";
   
+
+  // Preview/add service area on Add Client form
+  const previewNewBtn = document.getElementById("previewNewAreaBtn");
+  const addNewBtn = document.getElementById("addNewAreaBtn");
+  if (previewNewBtn && addNewBtn) {
+    previewNewBtn.addEventListener("click", async () => {
+      const entry = document.getElementById("newClientServiceArea").value.trim();
+      await previewServiceAreaEntry(entry, document.getElementById("previewNewStatus"), 'add');
+    });
+    addNewBtn.addEventListener("click", () => {
+      const input = document.getElementById("newClientServiceArea");
+      const statusEl = document.getElementById("previewNewStatus");
+      const entry = (lastPreviewEntry.add || input.value.trim());
+      if (!entry) { setPreviewStatus(statusEl, 'Nothing to add'); return; }
+      appendEntryToInput(input, entry);
+      setPreviewStatus(statusEl, `Added ${entry} to Service Area`);
+    });
+  }
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=3`);
     const data = await res.json();
@@ -552,6 +918,8 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
     document.getElementById("editClientLocation").disabled = true;
     document.getElementById("editClientServiceArea").disabled = true;
     document.getElementById("saveEditBtn").disabled = true;
+    document.getElementById("previewEditAreaBtn").disabled = true;
+    document.getElementById("addEditAreaBtn").disabled = true;
     return;
   }
   
@@ -566,7 +934,29 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
   document.getElementById("editClientLocation").disabled = false;
   document.getElementById("editClientServiceArea").disabled = false;
   document.getElementById("saveEditBtn").disabled = false;
+   document.getElementById("previewEditAreaBtn").disabled = false;
+   document.getElementById("addEditAreaBtn").disabled = false;
 });
+
+// Preview/add service area on Edit Client form
+const previewEditBtn = document.getElementById("previewEditAreaBtn");
+const addEditBtn = document.getElementById("addEditAreaBtn");
+if (previewEditBtn && addEditBtn) {
+  previewEditBtn.addEventListener("click", async () => {
+    if (previewEditBtn.disabled) return;
+    const entry = document.getElementById("editClientServiceArea").value.trim();
+    await previewServiceAreaEntry(entry, document.getElementById("previewEditStatus"), 'edit');
+  });
+  addEditBtn.addEventListener("click", () => {
+    if (addEditBtn.disabled) return;
+    const input = document.getElementById("editClientServiceArea");
+    const statusEl = document.getElementById("previewEditStatus");
+    const entry = (lastPreviewEntry.edit || input.value.trim());
+    if (!entry) { setPreviewStatus(statusEl, 'Nothing to add'); return; }
+    appendEntryToInput(input, entry);
+    setPreviewStatus(statusEl, `Added ${entry} to Service Area`);
+  });
+}
 
 // SAVE EDIT
 document.getElementById("saveEditBtn").addEventListener("click", async () => {
