@@ -66,7 +66,11 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
       <input type="text" id="newClientName" placeholder="Client Name" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
       <input type="text" id="newClientIndustry" placeholder="Industry" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
       <input type="text" id="newClientLocation" placeholder="Location (e.g., Austin, TX)" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
-      <input type="text" id="newClientServiceArea" placeholder="Service Area" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+        <input type="text" id="newClientServiceArea" placeholder="Service Area" style="flex:1; padding:6px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
+        <button id="toggleNewAreaEdit" type="button" title="Edit Service Area" style="padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;">✎</button>
+      </div>
+      <input type="text" id="areaSearchAdd" placeholder="Search ZIP / city / area to preview" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;">
       <div style="display:flex; gap:6px; margin-bottom:8px;">
         <button id="previewNewAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;">🔍 Preview Area</button>
         <button id="addNewAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;">➕ Add to Service Area</button>
@@ -88,7 +92,11 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
       <input type="text" id="editClientName" placeholder="Client Name" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <input type="text" id="editClientIndustry" placeholder="Industry" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <input type="text" id="editClientLocation" placeholder="Location" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
-      <input type="text" id="editClientServiceArea" placeholder="Service Area" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+        <input type="text" id="editClientServiceArea" placeholder="Service Area" style="flex:1; padding:6px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
+        <button id="toggleEditAreaEdit" type="button" title="Edit Service Area" style="padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>✎</button>
+      </div>
+      <input type="text" id="areaSearchEdit" placeholder="Search ZIP / city / area to preview" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <div style="display:flex; gap:6px; margin-bottom:8px;">
         <button id="previewEditAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>🔍 Preview Area</button>
         <button id="addEditAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>➕ Add to Service Area</button>
@@ -371,6 +379,10 @@ function appendEntryToInput(inputEl, entry) {
   if (!parts.includes(entry)) parts.push(entry);
   inputEl.value = parts.join(', ');
 }
+function dedupeServiceAreaInput(inputEl) {
+  const parts = inputEl.value.split(',').map(p => p.trim()).filter(Boolean);
+  inputEl.value = [...new Set(parts)].join(', ');
+}
 
 function setPreviewStatus(el, msg) {
   if (!el) return;
@@ -395,6 +407,41 @@ async function previewServiceAreaEntry(entry, statusEl, contextKey) {
       const result = await fetchPolygonForEntry(attempt);
       if (!result || !result.feature) continue;
       previewLayer = L.geoJSON(result.feature, { style: SERVICE_AREA_STYLE }).addTo(map);
+      try {
+        previewLayer.on('mouseover', () => {
+          const ask = confirm(`Add ${result.label || attempt} to Service Area?`);
+          if (!ask) return;
+          const input = (contextKey === 'edit') ? document.getElementById('editClientServiceArea') : document.getElementById('newClientServiceArea');
+          appendEntryToInput(input, result.label || attempt);
+          dedupeServiceAreaInput(input);
+          setPreviewStatus(statusEl, `Added ${result.label || attempt} to Service Area`);
+          if (contextKey === 'edit') {
+            try {
+              const idxVal = parseInt(document.getElementById('clientToEdit').value);
+              if (!isNaN(idxVal)) {
+                const originalClient = clients[idxVal];
+                fetch(APPS_SCRIPT_URL, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    action: 'editClient',
+                    data: {
+                      originalName: originalClient[0],
+                      name: document.getElementById('editClientName').value.trim(),
+                      industry: document.getElementById('editClientIndustry').value.trim(),
+                      location: document.getElementById('editClientLocation').value.trim(),
+                      serviceArea: input.value.trim(),
+                      lat: originalClient[4][0],
+                      lng: originalClient[4][1]
+                    }
+                  })
+                }).then(r=>r.json()).then(res=>{
+                  if (res.success) setPreviewStatus(statusEl, `✓ Saved to database`);
+                }).catch(()=>{});
+              }
+            } catch(_) {}
+          }
+        });
+      } catch(_) {}
       try { map.fitBounds(previewLayer.getBounds(), { padding: [20, 20] }); } catch(_) {}
       setPreviewStatus(statusEl, `Previewing: ${result.label || attempt}`);
       lastPreviewEntry[contextKey] = attempt;
@@ -564,7 +611,13 @@ async function setupServiceAreaOnClick(marker, client) {
   marker.on('click', async () => {
     console.log(`[SA] Click handler fired for ${name}`);
     const existing = window.__serviceAreaLayers[name];
-    if (existing) { try { existing.remove(); } catch(_){} delete window.__serviceAreaLayers[name]; return; }
+    if (existing) {
+      try { map.removeLayer(existing); } catch(_) {}
+      try { existing.remove(); } catch(_) {}
+      delete window.__serviceAreaLayers[name];
+      console.log(`[SA-TOGGLE] Removed service area for ${name}`);
+      return;
+    }
 
     const group = L.layerGroup().addTo(map);
     const features = [];
@@ -591,7 +644,7 @@ async function setupServiceAreaOnClick(marker, client) {
       } catch(err) { console.error('[SA-UNION] Error:', err); }
     }
     try {
-      L.geoJSON(unionFeat, { style: SERVICE_AREA_STYLE }).addTo(group);
+      L.geoJSON(unionFeat, { style: SERVICE_AREA_STYLE, interactive:false }).addTo(group);
       console.log('[SA-RENDER] Union polygon added to map');
     } catch(err) { console.error('[SA-RENDER] Error adding union:', err); }
 
@@ -718,7 +771,8 @@ async function geocodeAndValidate(location) {
   const addNewBtn = document.getElementById("addNewAreaBtn");
   if (previewNewBtn && addNewBtn) {
     previewNewBtn.addEventListener("click", async () => {
-      const entry = document.getElementById("newClientServiceArea").value.trim();
+      const src = document.getElementById("areaSearchAdd").value.trim();
+      const entry = src || document.getElementById("newClientServiceArea").value.trim();
       await previewServiceAreaEntry(entry, document.getElementById("previewNewStatus"), 'add');
     });
     addNewBtn.addEventListener("click", () => {
@@ -949,10 +1003,12 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
   document.getElementById("editClientName").disabled = false;
   document.getElementById("editClientIndustry").disabled = false;
   document.getElementById("editClientLocation").disabled = false;
-  document.getElementById("editClientServiceArea").disabled = false;
+  document.getElementById("editClientServiceArea").disabled = true;
   document.getElementById("saveEditBtn").disabled = false;
-   document.getElementById("previewEditAreaBtn").disabled = false;
-   document.getElementById("addEditAreaBtn").disabled = false;
+  document.getElementById("previewEditAreaBtn").disabled = false;
+  document.getElementById("addEditAreaBtn").disabled = false;
+  document.getElementById("toggleEditAreaEdit").disabled = false;
+  document.getElementById("areaSearchEdit").disabled = false;
 });
 
 // Preview/add service area on Edit Client form
@@ -961,7 +1017,8 @@ const addEditBtn = document.getElementById("addEditAreaBtn");
 if (previewEditBtn && addEditBtn) {
   previewEditBtn.addEventListener("click", async () => {
     if (previewEditBtn.disabled) return;
-    const entry = document.getElementById("editClientServiceArea").value.trim();
+    const src = document.getElementById("areaSearchEdit").value.trim();
+    const entry = src || document.getElementById("editClientServiceArea").value.trim();
     await previewServiceAreaEntry(entry, document.getElementById("previewEditStatus"), 'edit');
   });
   addEditBtn.addEventListener("click", () => {
@@ -1042,6 +1099,24 @@ document.querySelectorAll(".closeForm").forEach(btn => {
     document.getElementById(e.target.dataset.form).style.display = "none";
   });
 });
+
+// Toggle edit buttons for Service Area inputs
+const toggleNew = document.getElementById('toggleNewAreaEdit');
+if (toggleNew) {
+  toggleNew.addEventListener('click', () => {
+    const input = document.getElementById('newClientServiceArea');
+    input.disabled = !input.disabled;
+    toggleNew.textContent = input.disabled ? '✎' : '✓';
+  });
+}
+const toggleEdit = document.getElementById('toggleEditAreaEdit');
+if (toggleEdit) {
+  toggleEdit.addEventListener('click', () => {
+    const input = document.getElementById('editClientServiceArea');
+    input.disabled = !input.disabled;
+    toggleEdit.textContent = input.disabled ? '✎' : '✓';
+  });
+}
 
 function buildLegend(){
   const box=document.getElementById("legendBox");

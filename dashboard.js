@@ -578,7 +578,7 @@ async function setupServiceAreaOnClick(marker, client) {
           }
         }
         try {
-          L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE }).addTo(group);
+          L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE, interactive:false }).addTo(group);
           console.log('[SA-RENDER] Union polygon added to map');
         } catch(err) { console.error('[SA-RENDER] Error adding union:', err); }
         
