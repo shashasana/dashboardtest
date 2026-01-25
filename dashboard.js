@@ -355,23 +355,28 @@ async function previewServiceAreaEntry(entry, statusEl, contextKey) {
     setPreviewStatus(statusEl, 'Enter a ZIP or place');
     return null;
   }
-  setPreviewStatus(statusEl, 'Searching…');
-  clearPreviewLayer();
-  try {
-    const result = await fetchPolygonForEntry(entry);
-    if (!result || !result.feature) {
-      setPreviewStatus(statusEl, 'No polygon found');
-      return null;
-    }
-    previewLayer = L.geoJSON(result.feature, { style: SERVICE_AREA_STYLE }).addTo(map);
-    try { map.fitBounds(previewLayer.getBounds(), { padding: [20, 20] }); } catch(_) {}
-    setPreviewStatus(statusEl, `Previewing: ${result.label || entry}`);
-    lastPreviewEntry[contextKey] = entry;
-    return result;
-  } catch(err) {
-    setPreviewStatus(statusEl, `Error: ${err.message || err}`);
+  const attempts = normalizeServiceAreaInput(entry).slice(0, 10);
+  if (attempts.length === 0) {
+    setPreviewStatus(statusEl, 'Enter a ZIP or place');
     return null;
   }
+  setPreviewStatus(statusEl, 'Searching…');
+  clearPreviewLayer();
+  for (const attempt of attempts) {
+    try {
+      const result = await fetchPolygonForEntry(attempt);
+      if (!result || !result.feature) continue;
+      previewLayer = L.geoJSON(result.feature, { style: SERVICE_AREA_STYLE }).addTo(map);
+      try { map.fitBounds(previewLayer.getBounds(), { padding: [20, 20] }); } catch(_) {}
+      setPreviewStatus(statusEl, `Previewing: ${result.label || attempt}`);
+      lastPreviewEntry[contextKey] = attempt;
+      return result;
+    } catch(err) {
+      console.error('[PREVIEW] Error for', attempt, err);
+    }
+  }
+  setPreviewStatus(statusEl, 'No polygon found');
+  return null;
 }
 
 function normalizeServiceAreaInput(str) {
@@ -521,7 +526,7 @@ async function setupServiceAreaOnClick(marker, client) {
   try {
     const [name, inds, loc, serviceArea, coords] = client;
     console.log(`[SA-SETUP] Attaching for: ${name}, serviceArea: "${serviceArea}"`);
-    const entries = normalizeServiceAreaInput(serviceArea);
+    const entries = [...new Set(normalizeServiceAreaInput(serviceArea))].slice(0, 12);
     console.log(`[SA-SETUP] Normalized to:`, entries);
     if (entries.length === 0) {
       console.log(`[SA-SETUP] No entries, skipping click handler for ${name}`);
