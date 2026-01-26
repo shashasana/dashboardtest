@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { lat, lng } = req.query;
   
   const allEnvKeys = Object.keys(process.env);
@@ -19,6 +19,17 @@ export default async function handler(req, res) {
         availableEnvVars: allEnvKeys
       });
     }
+
+    const response = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`
+    );
+    
+    const data = await response.json();
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch weather' });
+  }
+}
 
     const response = await fetch(
       `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`
