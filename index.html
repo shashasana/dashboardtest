@@ -41,6 +41,19 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
 #map { width:100%; height:100%; }
 #chartContainer { width:100%; height:450px; margin-bottom:10px; }
 #industryChart { width:100%; height:100%; }
+.temp-label {
+  background: rgba(0, 0, 0, 0.7) !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 4px 8px !important;
+  color: white !important;
+  font-weight: bold !important;
+  font-size: 13px !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+}
+.temp-label::before {
+  display: none !important;
+}
 </style>
 </head>
 <body>
@@ -325,13 +338,24 @@ function formatLocalTime(offsetSeconds) {
 async function setupPopup(marker, client) {
   const [name, inds, loc, serviceArea, coords] = client;
   marker.bindPopup(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Loading…`);
+  
+  // Add permanent temperature label
+  marker.bindTooltip('Loading...', { 
+    permanent: true, 
+    direction: 'top',
+    offset: [0, -10],
+    className: 'temp-label'
+  });
+  
   const update = async () => {
     try {
       const {temp, tzOffset} = await fetchWeather(coords[0], coords[1]);
       const timeStr = formatLocalTime(tzOffset);
       marker.getPopup().setContent(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Local Time: ${timeStr}<br>Temp: ${temp}°C`);
+      marker.setTooltipContent(`${temp}°C`);
     } catch(_) {
       marker.getPopup().setContent(`<b>${name}</b><br>Industry: ${inds}<br>Location: ${loc}<br>Local Time: N/A<br>Temp: N/A`);
+      marker.setTooltipContent('N/A');
     }
   };
   await update();
