@@ -1,10 +1,6 @@
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   try {
     const { lat, lng } = req.query;
-    
-    const allEnvKeys = Object.keys(process.env);
-    console.log("All ENV vars:", allEnvKeys);
-    console.log("OPENWEATHER_API_KEY value:", process.env.OPENWEATHER_API_KEY ? "SET" : "NOT SET");
     
     if (!lat || !lng) {
       return res.status(400).json({ error: 'Missing lat or lng parameter' });
@@ -13,15 +9,16 @@ export default async function handler(req, res) {
     const apiKey = process.env.OPENWEATHER_API_KEY;
     
     if (!apiKey) {
-      return res.status(500).json({ 
-        error: 'API key not configured',
-        availableEnvVars: allEnvKeys
-      });
+      return res.status(500).json({ error: 'API key not configured' });
     }
 
     const response = await fetch(
       `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`
     );
+    
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Weather API error: ${response.statusText}` });
+    }
     
     const data = await response.json();
     return res.status(200).json(data);
@@ -29,7 +26,7 @@ export default async function handler(req, res) {
     console.error("Handler error:", error);
     return res.status(500).json({ error: 'Failed to fetch weather', details: error.message });
   }
-}
+};
 
     const response = await fetch(
       `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`
