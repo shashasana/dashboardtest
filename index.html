@@ -1188,6 +1188,18 @@ document.getElementById("deleteClientBtn").addEventListener("click", () => {
 document.querySelectorAll(".closeForm").forEach(btn => {
   btn.addEventListener("click", (e) => {
     document.getElementById(e.target.dataset.form).style.display = "none";
+    // Clear preview layer and service area layers
+    clearPreviewLayer();
+    if (window.__editServiceAreaLayer) {
+      try { map.removeLayer(window.__editServiceAreaLayer); } catch(_) {}
+      window.__editServiceAreaLayer = null;
+    }
+    if (window.__serviceAreaLayers) {
+      Object.values(window.__serviceAreaLayers).forEach(layer => {
+        try { map.removeLayer(layer); } catch(_) {}
+      });
+      window.__serviceAreaLayers = {};
+    }
   });
 });
 
