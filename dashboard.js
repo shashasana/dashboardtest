@@ -982,6 +982,16 @@ document.querySelectorAll(".closeForm").forEach(btn => {
   btn.addEventListener("click", (e) => {
     const formId = e.target.dataset.form;
     document.getElementById(formId).style.display = "none";
+    
+    // Clear preview layers and status when closing forms
+    if (formId === "editClientForm" || formId === "addClientForm") {
+      clearPreviewLayer();
+      const previewStatus = document.getElementById(formId === "addClientForm" ? "previewNewStatus" : "previewEditStatus");
+      if (previewStatus) {
+        previewStatus.style.display = "none";
+        previewStatus.textContent = "";
+      }
+    }
   });
 });
 });
