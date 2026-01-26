@@ -4,7 +4,8 @@
   "description": "Client Industry Dashboard",
   "main": "index.html",
   "scripts": {
-    "start": "vercel dev"
+    "start": "vercel dev",
+    "dev": "node server.js"
   },
   "author": "Your Name",
   "license": "MIT"
