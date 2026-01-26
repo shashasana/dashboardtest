@@ -33,18 +33,3 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch weather', details: error.message });
   }
 };
-
-    const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`
-    );
-    
-    const data = await response.json();
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch weather' });
-  }
-}
-
-if (!apiKey) {
-  return res.status(500).json({ error: 'API key not configured', env: Object.keys(process.env) });
-}
