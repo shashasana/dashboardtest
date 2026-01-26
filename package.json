@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Client Industry Dashboard",
   "main": "index.html",
-  "type": "module",
   "scripts": {
     "start": "vercel dev",
     "dev": "node server.js"
