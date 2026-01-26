@@ -189,7 +189,7 @@ const colors = {
 
 // GOOGLE SHEET CONFIG
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxrSX96FuF-B7MFG1d458bdgnnVkyh1TWFuQDFnYur5vywe4OqzOoOZJ_DyuegddOic/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwEViyLcgpTqFNElzY9b18o-nP0um-E1HNmavEpazC2VEGyEyEr3kUBVLMLeghSnjZA/exec";
 
 // GEOCODE LOCATION
 async function geocodeLocation(location) {
@@ -652,16 +652,15 @@ async function setupServiceAreaOnClick(marker, client) {
     console.log(`[SA] Click handler fired for ${name}`);
     const existing = window.__serviceAreaLayers[name];
     if (existing) {
-      try { map.removeLayer(existing); } catch(_) {}
-      try { existing.remove(); } catch(_) {}
       try { existing.clearLayers(); } catch(_) {}
+      try { map.removeLayer(existing); } catch(_) {}
       delete window.__serviceAreaLayers[name];
       console.log(`[SA-TOGGLE] Removed service area for ${name}`);
       return; // Exit early after toggle off
     }
 
     // Show areas
-    const group = L.layerGroup().addTo(map);
+    const group = L.featureGroup().addTo(map);
     const features = [];
     const labels = [];
     for (const e of entries) {
@@ -1073,7 +1072,7 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
     const entries = [...new Set(normalizeServiceAreaInput(serviceArea))].slice(0, 12);
     if (entries.length === 0) return;
     
-    const group = L.layerGroup().addTo(map);
+    const group = L.featureGroup().addTo(map);
     const features = [];
     const labels = [];
     for (const e of entries) {
