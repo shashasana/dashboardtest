@@ -1,16 +1,15 @@
-module.exports = async function handler(req, res) {
-  const { lat, lng } = req.query;
-  
-  const allEnvKeys = Object.keys(process.env);
-  console.log("All ENV vars:", allEnvKeys);
-  console.log("ENV vars with OPEN/WEATHER:", allEnvKeys.filter(k => k.includes('OPEN') || k.includes('WEATHER') || k.includes('API')));
-  console.log("OPENWEATHER_API_KEY value:", process.env.OPENWEATHER_API_KEY ? "SET" : "NOT SET");
-  
-  if (!lat || !lng) {
-    return res.status(400).json({ error: 'Missing lat or lng parameter' });
-  }
-
+export default async function handler(req, res) {
   try {
+    const { lat, lng } = req.query;
+    
+    const allEnvKeys = Object.keys(process.env);
+    console.log("All ENV vars:", allEnvKeys);
+    console.log("OPENWEATHER_API_KEY value:", process.env.OPENWEATHER_API_KEY ? "SET" : "NOT SET");
+    
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Missing lat or lng parameter' });
+    }
+
     const apiKey = process.env.OPENWEATHER_API_KEY;
     
     if (!apiKey) {
@@ -25,9 +24,10 @@ module.exports = async function handler(req, res) {
     );
     
     const data = await response.json();
-    res.status(200).json(data);
+    return res.status(200).json(data);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch weather' });
+    console.error("Handler error:", error);
+    return res.status(500).json({ error: 'Failed to fetch weather', details: error.message });
   }
 }
 
