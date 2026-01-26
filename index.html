@@ -718,7 +718,11 @@ async function setupServiceAreaOnClick(marker, client) {
 
     window.__serviceAreaLayers[name] = group;
     console.log('[SA-COMPLETE] Service area rendered and cached for', name);
-    try { map.fitBounds(group.getBounds(), { padding: [50, 50] }); } catch(e) { console.error('[SA-FITBOUNDS]', e); }
+    try { 
+      if (group.getLayers && group.getLayers().length > 0) {
+        map.fitBounds(group.getBounds(), { padding: [50, 50] }); 
+      }
+    } catch(e) { console.error('[SA-FITBOUNDS]', e); }
   });
 }
 
