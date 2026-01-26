@@ -1,6 +1,9 @@
 export default async function handler(req, res) {
   const { lat, lng } = req.query;
   
+  console.log("ENV vars available:", Object.keys(process.env).filter(k => k.includes('OPEN') || k.includes('WEATHER')));
+  console.log("OPENWEATHER_API_KEY value:", process.env.OPENWEATHER_API_KEY ? "SET" : "NOT SET");
+  
   if (!lat || !lng) {
     return res.status(400).json({ error: 'Missing lat or lng parameter' });
   }
