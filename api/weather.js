@@ -2,6 +2,9 @@ module.exports = async (req, res) => {
   try {
     const { lat, lng } = req.query;
     
+    console.log("Available env vars:", Object.keys(process.env));
+    console.log("OPENWEATHER_API_KEY:", process.env.OPENWEATHER_API_KEY ? "EXISTS" : "MISSING");
+    
     if (!lat || !lng) {
       return res.status(400).json({ error: 'Missing lat or lng parameter' });
     }
@@ -9,7 +12,10 @@ module.exports = async (req, res) => {
     const apiKey = process.env.OPENWEATHER_API_KEY;
     
     if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured' });
+      return res.status(500).json({ 
+        error: 'API key not configured',
+        envVars: Object.keys(process.env)
+      });
     }
 
     const response = await fetch(
