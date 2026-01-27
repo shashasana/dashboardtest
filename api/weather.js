@@ -23,11 +23,18 @@ module.exports = async (req, res) => {
 
       console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y}`);
       
-      // Ensure layer names have '_new' suffix for OpenWeatherMap
-      const layerName = layer.includes('_new') ? layer : `${layer}_new`;
-      const tileUrl = `https://tile.openweathermap.org/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
+      // Map old layer names to Weather Maps 2.0 API layer codes
+      const layerMap = {
+        'precipitation': 'PR0',
+        'clouds': 'CL',
+        'radar': 'PR0',
+        'wind': 'WNDUV',
+        'temp': 'TA2'
+      };
+      const layerCode = layerMap[layer] || layer;
+      const tileUrl = `https://maps.openweathermap.org/maps/2.0/weather/1h/${layerCode}/${z}/${x}/${y}.png?appid=${apiKey}`;
       
-      console.log(`[WEATHER-TILE] Final URL: ${tileUrl}`);
+      console.log(`[WEATHER-TILE] Mapped ${layer} -> ${layerCode}. Final URL: ${tileUrl}`);
       
       try {
         const tileResponse = await fetch(tileUrl);
