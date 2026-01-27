@@ -261,7 +261,21 @@ const weatherLayers = {
   temp: L.tileLayer('/api/weather?type=tile&layer=temperature&z={z}&x={x}&y={y}', { opacity: 0.6 })
 };
 
-console.log('Weather layers created:', weatherLayers);
+console.log('[WEATHER] Weather layers created:', weatherLayers);
+console.log('[WEATHER] Sample tile URL:', '/api/weather?type=tile&layer=precipitation&z=4&x=3&y=5');
+
+// Add tile load event listeners for debugging
+Object.keys(weatherLayers).forEach(key => {
+  weatherLayers[key].on('tileloadstart', (e) => {
+    console.log(`[WEATHER] ${key} tile load started:`, e.coords);
+  });
+  weatherLayers[key].on('tileload', (e) => {
+    console.log(`[WEATHER] ${key} tile loaded successfully:`, e.coords);
+  });
+  weatherLayers[key].on('tileerror', (e) => {
+    console.error(`[WEATHER] ${key} tile load ERROR:`, e.coords, e.error);
+  });
+});
 
 const precipToggle = document.getElementById("precipToggle");
 const cloudsToggle = document.getElementById("cloudsToggle");
@@ -269,14 +283,17 @@ const radarToggle = document.getElementById("radarToggle");
 const windToggle = document.getElementById("windToggle");
 const tempToggle = document.getElementById("tempToggle");
 
-console.log('Toggle elements found:', {precipToggle, cloudsToggle, radarToggle, windToggle, tempToggle});
+console.log('[WEATHER] Toggle elements found:', {precipToggle, cloudsToggle, radarToggle, windToggle, tempToggle});
 
 if(precipToggle) {
   precipToggle.addEventListener("change", (e) => {
-    console.log('Precipitation toggle:', e.target.checked);
+    console.log('[WEATHER] Precipitation toggle:', e.target.checked);
     if(e.target.checked) {
+      console.log('[WEATHER] Adding precipitation layer to map...');
       map.addLayer(weatherLayers.precipitation);
+      console.log('[WEATHER] Map now has layers:', Object.keys(map._layers).length);
     } else {
+      console.log('[WEATHER] Removing precipitation layer from map...');
       map.removeLayer(weatherLayers.precipitation);
     }
   });
@@ -284,10 +301,13 @@ if(precipToggle) {
 
 if(cloudsToggle) {
   cloudsToggle.addEventListener("change", (e) => {
-    console.log('Clouds toggle:', e.target.checked);
+    console.log('[WEATHER] Clouds toggle:', e.target.checked);
     if(e.target.checked) {
+      console.log('[WEATHER] Adding clouds layer to map...');
       map.addLayer(weatherLayers.clouds);
+      console.log('[WEATHER] Map now has layers:', Object.keys(map._layers).length);
     } else {
+      console.log('[WEATHER] Removing clouds layer from map...');
       map.removeLayer(weatherLayers.clouds);
     }
   });
@@ -295,10 +315,13 @@ if(cloudsToggle) {
 
 if(radarToggle) {
   radarToggle.addEventListener("change", (e) => {
-    console.log('Radar toggle:', e.target.checked);
+    console.log('[WEATHER] Radar toggle:', e.target.checked);
     if(e.target.checked) {
+      console.log('[WEATHER] Adding radar layer to map...');
       map.addLayer(weatherLayers.radar);
+      console.log('[WEATHER] Map now has layers:', Object.keys(map._layers).length);
     } else {
+      console.log('[WEATHER] Removing radar layer from map...');
       map.removeLayer(weatherLayers.radar);
     }
   });
@@ -306,10 +329,13 @@ if(radarToggle) {
 
 if(windToggle) {
   windToggle.addEventListener("change", (e) => {
-    console.log('Wind toggle:', e.target.checked);
+    console.log('[WEATHER] Wind toggle:', e.target.checked);
     if(e.target.checked) {
+      console.log('[WEATHER] Adding wind layer to map...');
       map.addLayer(weatherLayers.wind);
+      console.log('[WEATHER] Map now has layers:', Object.keys(map._layers).length);
     } else {
+      console.log('[WEATHER] Removing wind layer from map...');
       map.removeLayer(weatherLayers.wind);
     }
   });
@@ -317,10 +343,13 @@ if(windToggle) {
 
 if(tempToggle) {
   tempToggle.addEventListener("change", (e) => {
-    console.log('Temperature toggle:', e.target.checked);
+    console.log('[WEATHER] Temperature toggle:', e.target.checked);
     if(e.target.checked) {
+      console.log('[WEATHER] Adding temperature layer to map...');
       map.addLayer(weatherLayers.temp);
+      console.log('[WEATHER] Map now has layers:', Object.keys(map._layers).length);
     } else {
+      console.log('[WEATHER] Removing temperature layer from map...');
       map.removeLayer(weatherLayers.temp);
     }
   });
