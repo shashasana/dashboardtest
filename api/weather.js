@@ -34,10 +34,11 @@ module.exports = async (req, res) => {
       };
       const layerName = layerMap[layer] || (layer.includes('_new') ? layer : `${layer}_new`);
       
-      // Custom color palettes for better visibility
+      // Custom color palettes for better visibility against white map
       const palettes = {
-        'snow_new': '0:00000000;0.1:E3F2FD;0.5:90CAF9;1:42A5F5;2:1E88E5;5:1565C0;10:0D47A1;50:001F3F',
-        'clouds_new': '0:00000000;10:E0E0E0;30:BDBDBD;50:9E9E9E;70:757575;90:616161;100:424242'
+        'snow_new': '0:00000000;0.1:4A90E2;0.5:2E5C8A;1:1A3A52;2:0F2437;5:1E3A5F;10:0D1F3C;50:081428',
+        'clouds_new': '0:00000000;10:666666;30:555555;50:444444;70:333333;90:222222;100:111111',
+        'precipitation_new': '0:00000000;0.1:FFF700;1:FFDD00;2:FFAA00;5:FF6600;10:FF3300;20:CC0000;50:660000'
       };
       
       let tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
