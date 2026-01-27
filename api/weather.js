@@ -1,16 +1,10 @@
-// Track API calls per day (resets on server restart/redeploy)
+// Track API calls per session (resets on serverless cold start/redeploy)
+// Note: Vercel serverless functions are stateless, so this counter resets frequently
 let apiCallCount = 0;
-let currentDate = new Date().toDateString();
+let sessionStart = new Date().toLocaleString();
 
 module.exports = async (req, res) => {
   try {
-    // Reset counter if date changed
-    const today = new Date().toDateString();
-    if (today !== currentDate) {
-      apiCallCount = 0;
-      currentDate = today;
-    }
-    
     const apiKey = process.env.OPENWEATHER_API_KEY;
     
     if (!apiKey) {
@@ -24,7 +18,7 @@ module.exports = async (req, res) => {
     if (req.query.type === 'stats') {
       return res.status(200).json({ 
         apiCalls: apiCallCount,
-        date: currentDate
+        sessionStart: sessionStart
       });
     }
 

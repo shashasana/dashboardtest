@@ -39,10 +39,28 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
 .legend-color { width:14px; height:14px; margin-right:8px; border:1px solid #000; }
 #resetLegend { margin-bottom:10px; padding:5px; background:#e74c3c; color:white; border:none; border-radius:3px; cursor:pointer; }
 #resetLegend:hover { background:#c0392b; }
-#map { width:100%; height:100%; }
-/* Enhanced weather layer styling - darker, more saturated colors */
+#map { width:100%; height:100%; position: relative; }
+/* Enhanced weather layer styling - EXTREMELY exaggerated colors */
 .weather-layer-enhanced {
-  filter: contrast(1.5) saturate(1.8) brightness(0.95) !important;
+  filter: contrast(2.5) saturate(3.0) brightness(0.85) hue-rotate(5deg) !important;
+}
+/* API counter at bottom of map */
+.leaflet-bottom.leaflet-left {
+  margin-bottom: 50px !important;
+}
+#mapApiCounter {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 5px 15px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: #333;
+  z-index: 1000;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+  pointer-events: none;
 }
 #chartContainer { width:100%; height:450px; margin-bottom:10px; }
 #industryChart { width:100%; height:100%; }
@@ -221,14 +239,14 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
       </div>
     </div>
     <div id="legendBox"></div>
-    <div id="apiStats" style="margin-top: auto; padding: 10px; background: #f0f0f0; border-radius: 5px; text-align: center; font-size: 12px; color: #666;">
-      <strong>API Calls Today</strong><br>
-      <span id="apiCallCount">0</span>
-    </div>
     <button id="toggleChartType">Switch to Pie Chart</button>
     <div id="chartContainer"><canvas id="industryChart"></canvas></div>
   </div>
-  <div id="map"></div>
+  <div id="map">
+    <div id="mapApiCounter">
+      <strong>API Calls (Session):</strong> <span id="apiCallCount">0</span>
+    </div>
+  </div>
 </div>
 <div id="accessDenied">
   <h1 style="margin-top:50px; color:#c0392b;">Access Denied</h1>
