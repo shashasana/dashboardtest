@@ -17,6 +17,7 @@
 const SHEET_ID = "10HaJdMVaqasoR1mrX39iP58hIMvrWV8GTztUX7_rVZM"; // Replace with your Google Sheet ID
 const DATABASE_SHEET = "Database";
 const TRASH_SHEET = "Trash";
+const API_LOGS_SHEET = "API Logs";
 
 // HANDLE GET REQUESTS (for polygon fetching)
 function doGet(e) {
@@ -25,6 +26,10 @@ function doGet(e) {
     
     if (action === "getPolygon") {
       return getPolygonData(e.parameter.entry);
+    }
+    
+    if (action === "logApiCall") {
+      return logApiCallData(e.parameter);
     }
     
     return returnError("Unknown GET action");
@@ -150,10 +155,14 @@ function doPost(e) {
       return restoreClient(payload.index);
     } else if (action === "permanentlyDelete") {
       return permanentlyDelete(payload.index);
+    } else if (action === "logApiCall") {
+      return logApiCallData(payload.data);
     } else if (action === "getDatabase") {
       return getDatabase();
     } else if (action === "editClient") {
       return editClient(payload.data);
+    } else if (action === "logApiCall") {
+      return logApiCall(payload.data);
     }
     
     return returnError("Unknown action");
@@ -198,6 +207,13 @@ function ensureSheets() {
   if (!ss.getSheetByName(TRASH_SHEET)) {
     ss.insertSheet(TRASH_SHEET);
     const sheet = ss.getSheetByName(TRASH_SHEET);
+  }
+  
+  if (!ss.getSheetByName(API_LOGS_SHEET)) {
+    ss.insertSheet(API_LOGS_SHEET);
+    const sheet = ss.getSheetByName(API_LOGS_SHEET);
+    sheet.appendRow(["Timestamp", "Date", "API Calls", "Session Start"]);
+  }
     sheet.appendRow(["Client", "Industry", "Location", "Service Area", "Latitude", "Longitude", "Deleted Date"]);
   }
 }
@@ -340,4 +356,59 @@ function returnError(message) {
   return ContentService.createTextOutput(
     JSON.stringify({ success: false, error: message })
   ).setMimeType(ContentService.MimeType.JSON);
+}
+
+// LOG API CALL STATS TO GOOGLE SHEET
+function logApiCall(data) {
+  try {
+    ensureSheets();
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const sheet = ss.getSheetByName(API_LOGS_SHEET);
+    
+    const timestamp = new Date();
+    const date = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    const time = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+    
+    sheet.appendRow([
+      time,
+      date,
+      data.apiCalls || 0,
+      data.sessionStart || ""
+    ]);
+    
+    return returnSuccess("API call logged successfully");
+  } catch (error) {
+    return returnError("Failed to log API call: " + error.toString());
+  }
+}
+
+// LOG API CALL DATA TO SHEET
+function logApiCallData(params) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    let sheet = ss.getSheetByName(API_LOGS_SHEET);
+    
+    // Create sheet if it doesn't exist
+    if (!sheet) {
+      sheet = ss.insertSheet(API_LOGS_SHEET);
+      sheet.appendRow(["Timestamp", "Date", "Time", "API Calls", "Session Start"]);
+    }
+    
+    const now = new Date();
+    const timestamp = now.toLocaleString('en-US', { timeZone: 'America/Chicago' });
+    const date = Utilities.formatDate(now, 'America/Chicago', 'yyyy-MM-dd');
+    const time = Utilities.formatDate(now, 'America/Chicago', 'HH:mm:ss');
+    
+    sheet.appendRow([
+      timestamp,
+      date,
+      time,
+      params.apiCalls || 0,
+      params.sessionStart || ""
+    ]);
+    
+    return returnSuccess("API call logged successfully");
+  } catch (error) {
+    return returnError("Failed to log API call: " + error.toString());
+  }
 }
