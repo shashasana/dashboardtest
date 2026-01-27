@@ -232,7 +232,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("accessDenied").style.display = "none";
 
 // MAP INIT
-const map = L.map("map").setView([39.5,-98.35],4);
+const usaBounds = [[24.396308, -125.0], [49.384358, -66.93457]];
+const map = L.map("map", {
+  maxBounds: usaBounds,
+  maxBoundsViscosity: 1.0,
+  minZoom: 4
+}).setView([37.8, -96], 4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
 // Create a dedicated pane for service-area layers so markers remain clickable
 try {
@@ -240,6 +245,31 @@ try {
   const p = map.getPane('serviceAreaPane');
   if (p) { p.style.zIndex = 350; }
 } catch(_) {}
+
+// WEATHER LAYERS
+const weatherLayers = {
+  precipitation: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { opacity: 0.6 }),
+  clouds: L.tileLayer('/api/weather?type=tile&layer=clouds&z={z}&x={x}&y={y}', { opacity: 0.6 }),
+  radar: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { opacity: 0.7 }),
+  wind: L.tileLayer('/api/weather?type=tile&layer=wind&z={z}&x={x}&y={y}', { opacity: 0.6 }),
+  temp: L.tileLayer('/api/weather?type=tile&layer=temperature&z={z}&x={x}&y={y}', { opacity: 0.6 })
+};
+
+document.getElementById("precipToggle")?.addEventListener("change", (e) => {
+  e.target.checked ? map.addLayer(weatherLayers.precipitation) : map.removeLayer(weatherLayers.precipitation);
+});
+document.getElementById("cloudsToggle")?.addEventListener("change", (e) => {
+  e.target.checked ? map.addLayer(weatherLayers.clouds) : map.removeLayer(weatherLayers.clouds);
+});
+document.getElementById("radarToggle")?.addEventListener("change", (e) => {
+  e.target.checked ? map.addLayer(weatherLayers.radar) : map.removeLayer(weatherLayers.radar);
+});
+document.getElementById("windToggle")?.addEventListener("change", (e) => {
+  e.target.checked ? map.addLayer(weatherLayers.wind) : map.removeLayer(weatherLayers.wind);
+});
+document.getElementById("tempToggle")?.addEventListener("change", (e) => {
+  e.target.checked ? map.addLayer(weatherLayers.temp) : map.removeLayer(weatherLayers.temp);
+});
 
 // COLORS
 const colors = {
@@ -1347,6 +1377,5 @@ document.getElementById("toggleChartType").addEventListener("click",()=>{
 
 });
 </script>
-<script src="dashboard.js"></script>
 </body>
 </html>
