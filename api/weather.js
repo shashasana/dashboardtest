@@ -23,7 +23,11 @@ module.exports = async (req, res) => {
 
       console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y}`);
       
-      const tileUrl = `https://tile.openweathermap.org/${layer}_new/${z}/${x}/${y}.png?appid=${apiKey}`;
+      // Ensure layer names have '_new' suffix for OpenWeatherMap
+      const layerName = layer.includes('_new') ? layer : `${layer}_new`;
+      const tileUrl = `https://tile.openweathermap.org/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
+      
+      console.log(`[WEATHER-TILE] Final URL: ${tileUrl}`);
       
       try {
         const tileResponse = await fetch(tileUrl);
