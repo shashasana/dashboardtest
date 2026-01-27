@@ -254,15 +254,38 @@ try {
 
 // WEATHER LAYERS
 const weatherLayers = {
-  precipitation: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { opacity: 0.6 }),
-  clouds: L.tileLayer('/api/weather?type=tile&layer=clouds&z={z}&x={x}&y={y}', { opacity: 0.6 }),
-  radar: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { opacity: 0.7 }),
-  wind: L.tileLayer('/api/weather?type=tile&layer=wind&z={z}&x={x}&y={y}', { opacity: 0.6 }),
-  temp: L.tileLayer('/api/weather?type=tile&layer=temperature&z={z}&x={x}&y={y}', { opacity: 0.6 })
+  precipitation: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
+    opacity: 0.6,
+    zIndex: 1000
+  }),
+  clouds: L.tileLayer('/api/weather?type=tile&layer=clouds&z={z}&x={x}&y={y}', { 
+    opacity: 0.6,
+    zIndex: 1000
+  }),
+  radar: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
+    opacity: 0.7,
+    zIndex: 1000
+  }),
+  wind: L.tileLayer('/api/weather?type=tile&layer=wind&z={z}&x={x}&y={y}', { 
+    opacity: 0.6,
+    zIndex: 1000
+  }),
+  temp: L.tileLayer('/api/weather?type=tile&layer=temperature&z={z}&x={x}&y={y}', { 
+    opacity: 0.6,
+    zIndex: 1000
+  })
 };
 
 console.log('[WEATHER] Weather layers created:', weatherLayers);
 console.log('[WEATHER] Sample tile URL:', '/api/weather?type=tile&layer=precipitation&z=4&x=3&y=5');
+
+// TEST: Add a simple colored overlay to verify layer rendering works
+const testOverlay = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+  opacity: 0.3,
+  zIndex: 999,
+  className: 'test-overlay'
+});
+console.log('[WEATHER] Test overlay created for verification');
 
 // Add tile load event listeners for debugging
 Object.keys(weatherLayers).forEach(key => {
