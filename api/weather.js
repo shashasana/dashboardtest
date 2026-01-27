@@ -23,24 +23,23 @@ module.exports = async (req, res) => {
 
       console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y}`);
       
-      // Map old layer names to Weather Maps 2.0 API layer codes
-      const layerMap = {
-        'precipitation': 'PR0',
-        'clouds': 'CL',
-        'radar': 'PR0',
-        'wind': 'WNDUV',
-        'temp': 'TA2'
-      };
-      const layerCode = layerMap[layer] || layer;
-      const tileUrl = `https://maps.openweathermap.org/maps/2.0/weather/1h/${layerCode}/${z}/${x}/${y}.png?appid=${apiKey}`;
+      // Use the classic OpenWeatherMap tile API with _new suffix
+      const layerName = layer.includes('_new') ? layer : `${layer}_new`;
+      const tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
       
-      console.log(`[WEATHER-TILE] Mapped ${layer} -> ${layerCode}. Final URL: ${tileUrl}`);
+      console.log(`[WEATHER-TILE] Using layer: ${layerName}. URL: ${tileUrl}`);
       
       try {
         const tileResponse = await fetch(tileUrl);
         
         if (!tileResponse.ok) {
-          console.error(`[WEATHER-TILE] Failed to fetch tile: ${tileResponse.status} ${tileResponse.statusText}`);
+          console.error(`[WEATHER-TILE] HTTP Error ${tileResponse.status}: ${tileResponse.statusText}`);
+          console.error(`[WEATHER-TILE] Response headers:`, Object.fromEntries(tileResponse.headers));
+          
+          // Log response body to understand the error
+          const text = await tileResponse.text();
+          console.error(`[WEATHER-TILE] Response body:`, text);
+          
           // Return a transparent 1x1 PNG on error
           const transparentPng = Buffer.from([
             0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
