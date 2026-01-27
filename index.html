@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/osmtogeojson.min.js"></script>
+
 <!-- LOGIN SCRIPT START -->
 <script>
   let isAuthenticated = false;
@@ -53,6 +54,42 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
 }
 .temp-label::before {
   display: none !important;
+}
+#weatherLayerControls {
+  margin: 10px 0;
+  padding: 10px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 13px;
+}
+#weatherLayerControls h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #333;
+}
+.weather-toggle {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+.weather-toggle:hover {
+  background: #f0f0f0;
+}
+.weather-toggle input[type="checkbox"] {
+  margin-right: 8px;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+.weather-toggle label {
+  cursor: pointer;
+  margin: 0;
+  flex: 1;
 }
 </style>
 </head>
@@ -143,6 +180,32 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
     </div>
 
     <input type="text" id="searchBox" placeholder="Search client / industry / location..." style="margin-bottom:15px;">
+    
+    <!-- Weather Layer Controls -->
+    <div id="weatherLayerControls">
+      <h4>🌦️ Weather Layers</h4>
+      <div class="weather-toggle">
+        <input type="checkbox" id="precipToggle" />
+        <label for="precipToggle">Precipitation</label>
+      </div>
+      <div class="weather-toggle">
+        <input type="checkbox" id="cloudsToggle" />
+        <label for="cloudsToggle">Cloud Cover</label>
+      </div>
+      <div class="weather-toggle">
+        <input type="checkbox" id="radarToggle" />
+        <label for="radarToggle">Radar (Rain)</label>
+      </div>
+      <div class="weather-toggle">
+        <input type="checkbox" id="windToggle" />
+        <label for="windToggle">Wind Speed</label>
+      </div>
+      <div class="weather-toggle">
+        <input type="checkbox" id="tempToggle" />
+        <label for="tempToggle">Temperature</label>
+      </div>
+    </div>
+    
     <div id="legendBox"></div>
     <button id="toggleChartType">Switch to Pie Chart</button>
     <div id="chartContainer"><canvas id="industryChart"></canvas></div>

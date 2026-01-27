@@ -12,6 +12,116 @@ try {
 } catch(_) {}
 console.log('[DASHBOARD] Map initialized successfully');
 
+// WEATHER LAYERS
+const weatherLayers = {
+  precipitation: null,
+  clouds: null,
+  radar: null,
+  wind: null,
+  temp: null
+};
+
+function initWeatherLayers() {
+  // Create custom tile layer URLs that call our serverless function
+  // This keeps the API key secure on the backend
+  
+  const createWeatherTileLayer = (layerType) => {
+    return L.tileLayer('/api/weather?type=tile&layer={layer}&z={z}&x={x}&y={y}'.replace('{layer}', layerType), {
+      layer: layerType,
+      maxZoom: 18,
+      opacity: 0.6,
+      attribution: "OpenWeatherMap",
+      // Use custom tile URL builder to pass parameters correctly
+      tms: false
+    });
+  };
+
+  // Create a custom tile layer class for weather tiles
+  const WeatherTileLayer = L.TileLayer.extend({
+    getTileUrl: function(coords) {
+      return `/api/weather?type=tile&layer=${this.options.weatherLayer}&z=${coords.z}&x=${coords.x}&y=${coords.y}`;
+    }
+  });
+
+  // Precipitation layer
+  weatherLayers.precipitation = new WeatherTileLayer('/api/weather', {
+    weatherLayer: 'precipitation',
+    opacity: 0.6,
+    attribution: "OpenWeatherMap"
+  });
+  
+  // Cloud cover layer
+  weatherLayers.clouds = new WeatherTileLayer('/api/weather', {
+    weatherLayer: 'clouds',
+    opacity: 0.6,
+    attribution: "OpenWeatherMap"
+  });
+  
+  // Radar/precipitation rate layer
+  weatherLayers.radar = new WeatherTileLayer('/api/weather', {
+    weatherLayer: 'precipitation',
+    opacity: 0.7,
+    attribution: "OpenWeatherMap"
+  });
+  
+  // Wind speed layer
+  weatherLayers.wind = new WeatherTileLayer('/api/weather', {
+    weatherLayer: 'wind',
+    opacity: 0.6,
+    attribution: "OpenWeatherMap"
+  });
+  
+  // Temperature layer
+  weatherLayers.temp = new WeatherTileLayer('/api/weather', {
+    weatherLayer: 'temperature',
+    opacity: 0.6,
+    attribution: "OpenWeatherMap"
+  });
+
+  // Setup event listeners for weather toggles
+  document.getElementById("precipToggle").addEventListener("change", (e) => {
+    if (e.target.checked) {
+      weatherLayers.precipitation.addTo(map);
+    } else {
+      map.removeLayer(weatherLayers.precipitation);
+    }
+  });
+
+  document.getElementById("cloudsToggle").addEventListener("change", (e) => {
+    if (e.target.checked) {
+      weatherLayers.clouds.addTo(map);
+    } else {
+      map.removeLayer(weatherLayers.clouds);
+    }
+  });
+
+  document.getElementById("radarToggle").addEventListener("change", (e) => {
+    if (e.target.checked) {
+      weatherLayers.radar.addTo(map);
+    } else {
+      map.removeLayer(weatherLayers.radar);
+    }
+  });
+
+  document.getElementById("windToggle").addEventListener("change", (e) => {
+    if (e.target.checked) {
+      weatherLayers.wind.addTo(map);
+    } else {
+      map.removeLayer(weatherLayers.wind);
+    }
+  });
+
+  document.getElementById("tempToggle").addEventListener("change", (e) => {
+    if (e.target.checked) {
+      weatherLayers.temp.addTo(map);
+    } else {
+      map.removeLayer(weatherLayers.temp);
+    }
+  });
+
+  console.log('[WEATHER] Weather layers initialized');
+}
+
 // STATE
 let clients = [];
 let filteredClients = []; // Track currently displayed clients
@@ -185,6 +295,9 @@ let markers = [], chart=null, currentChartType="bar";
   loadingDiv.innerHTML = "⏳ Loading...";
   
   try {
+    // Initialize weather layers first
+    initWeatherLayers();
+    
     clients = await fetchClientsFromSheet();
     // Localhost-only demo: inject service areas for preview without sheet changes
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
