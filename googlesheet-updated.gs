@@ -161,8 +161,6 @@ function doPost(e) {
       return getDatabase();
     } else if (action === "editClient") {
       return editClient(payload.data);
-    } else if (action === "logApiCall") {
-      return logApiCall(payload.data);
     }
     
     return returnError("Unknown action");
@@ -207,14 +205,13 @@ function ensureSheets() {
   if (!ss.getSheetByName(TRASH_SHEET)) {
     ss.insertSheet(TRASH_SHEET);
     const sheet = ss.getSheetByName(TRASH_SHEET);
+    sheet.appendRow(["Client", "Industry", "Location", "Service Area", "Latitude", "Longitude", "Deleted Date"]);
   }
   
   if (!ss.getSheetByName(API_LOGS_SHEET)) {
     ss.insertSheet(API_LOGS_SHEET);
     const sheet = ss.getSheetByName(API_LOGS_SHEET);
-    sheet.appendRow(["Timestamp", "Date", "API Calls", "Session Start"]);
-  }
-    sheet.appendRow(["Client", "Industry", "Location", "Service Area", "Latitude", "Longitude", "Deleted Date"]);
+    sheet.appendRow(["Timestamp", "Date", "Time", "API Calls", "Session Start"]);
   }
 }
 
@@ -356,30 +353,6 @@ function returnError(message) {
   return ContentService.createTextOutput(
     JSON.stringify({ success: false, error: message })
   ).setMimeType(ContentService.MimeType.JSON);
-}
-
-// LOG API CALL STATS TO GOOGLE SHEET
-function logApiCall(data) {
-  try {
-    ensureSheets();
-    const ss = SpreadsheetApp.openById(SHEET_ID);
-    const sheet = ss.getSheetByName(API_LOGS_SHEET);
-    
-    const timestamp = new Date();
-    const date = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "yyyy-MM-dd");
-    const time = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-    
-    sheet.appendRow([
-      time,
-      date,
-      data.apiCalls || 0,
-      data.sessionStart || ""
-    ]);
-    
-    return returnSuccess("API call logged successfully");
-  } catch (error) {
-    return returnError("Failed to log API call: " + error.toString());
-  }
 }
 
 // LOG API CALL DATA TO SHEET
