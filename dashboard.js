@@ -22,104 +22,93 @@ const weatherLayers = {
 };
 
 function initWeatherLayers() {
-  // Create custom tile layer URLs that call our serverless function
-  // This keeps the API key secure on the backend
+  console.log('[WEATHER] Initializing weather layers...');
   
-  const createWeatherTileLayer = (layerType) => {
-    return L.tileLayer('/api/weather?type=tile&layer={layer}&z={z}&x={x}&y={y}'.replace('{layer}', layerType), {
-      layer: layerType,
+  // Helper function to create weather tile layers
+  const createWeatherTileLayer = (layerType, opacity = 0.6) => {
+    return L.tileLayer('/api/weather?type=tile&layer={layer}&z={z}&x={x}&y={y}'
+      .replace('{layer}', layerType), {
+      minZoom: 0,
       maxZoom: 18,
-      opacity: 0.6,
-      attribution: "OpenWeatherMap",
-      // Use custom tile URL builder to pass parameters correctly
-      tms: false
+      opacity: opacity,
+      attribution: '&copy; OpenWeatherMap',
+      crossOrigin: 'anonymous',
+      errorTileUrl: ''
     });
   };
 
-  // Create a custom tile layer class for weather tiles
-  const WeatherTileLayer = L.TileLayer.extend({
-    getTileUrl: function(coords) {
-      return `/api/weather?type=tile&layer=${this.options.weatherLayer}&z=${coords.z}&x=${coords.x}&y=${coords.y}`;
-    }
-  });
+  // Create weather layers
+  weatherLayers.precipitation = createWeatherTileLayer('precipitation', 0.6);
+  weatherLayers.clouds = createWeatherTileLayer('clouds', 0.6);
+  weatherLayers.radar = createWeatherTileLayer('precipitation', 0.7);
+  weatherLayers.wind = createWeatherTileLayer('wind', 0.6);
+  weatherLayers.temp = createWeatherTileLayer('temperature', 0.6);
 
-  // Precipitation layer
-  weatherLayers.precipitation = new WeatherTileLayer('/api/weather', {
-    weatherLayer: 'precipitation',
-    opacity: 0.6,
-    attribution: "OpenWeatherMap"
-  });
-  
-  // Cloud cover layer
-  weatherLayers.clouds = new WeatherTileLayer('/api/weather', {
-    weatherLayer: 'clouds',
-    opacity: 0.6,
-    attribution: "OpenWeatherMap"
-  });
-  
-  // Radar/precipitation rate layer
-  weatherLayers.radar = new WeatherTileLayer('/api/weather', {
-    weatherLayer: 'precipitation',
-    opacity: 0.7,
-    attribution: "OpenWeatherMap"
-  });
-  
-  // Wind speed layer
-  weatherLayers.wind = new WeatherTileLayer('/api/weather', {
-    weatherLayer: 'wind',
-    opacity: 0.6,
-    attribution: "OpenWeatherMap"
-  });
-  
-  // Temperature layer
-  weatherLayers.temp = new WeatherTileLayer('/api/weather', {
-    weatherLayer: 'temperature',
-    opacity: 0.6,
-    attribution: "OpenWeatherMap"
-  });
+  console.log('[WEATHER] Weather layers created');
 
   // Setup event listeners for weather toggles
-  document.getElementById("precipToggle").addEventListener("change", (e) => {
-    if (e.target.checked) {
-      weatherLayers.precipitation.addTo(map);
-    } else {
-      map.removeLayer(weatherLayers.precipitation);
-    }
-  });
+  const precipToggle = document.getElementById("precipToggle");
+  const cloudsToggle = document.getElementById("cloudsToggle");
+  const radarToggle = document.getElementById("radarToggle");
+  const windToggle = document.getElementById("windToggle");
+  const tempToggle = document.getElementById("tempToggle");
 
-  document.getElementById("cloudsToggle").addEventListener("change", (e) => {
-    if (e.target.checked) {
-      weatherLayers.clouds.addTo(map);
-    } else {
-      map.removeLayer(weatherLayers.clouds);
-    }
-  });
+  if (precipToggle) {
+    precipToggle.addEventListener("change", (e) => {
+      console.log('[WEATHER] Precipitation toggle:', e.target.checked);
+      if (e.target.checked) {
+        map.addLayer(weatherLayers.precipitation);
+      } else {
+        map.removeLayer(weatherLayers.precipitation);
+      }
+    });
+  }
 
-  document.getElementById("radarToggle").addEventListener("change", (e) => {
-    if (e.target.checked) {
-      weatherLayers.radar.addTo(map);
-    } else {
-      map.removeLayer(weatherLayers.radar);
-    }
-  });
+  if (cloudsToggle) {
+    cloudsToggle.addEventListener("change", (e) => {
+      console.log('[WEATHER] Clouds toggle:', e.target.checked);
+      if (e.target.checked) {
+        map.addLayer(weatherLayers.clouds);
+      } else {
+        map.removeLayer(weatherLayers.clouds);
+      }
+    });
+  }
 
-  document.getElementById("windToggle").addEventListener("change", (e) => {
-    if (e.target.checked) {
-      weatherLayers.wind.addTo(map);
-    } else {
-      map.removeLayer(weatherLayers.wind);
-    }
-  });
+  if (radarToggle) {
+    radarToggle.addEventListener("change", (e) => {
+      console.log('[WEATHER] Radar toggle:', e.target.checked);
+      if (e.target.checked) {
+        map.addLayer(weatherLayers.radar);
+      } else {
+        map.removeLayer(weatherLayers.radar);
+      }
+    });
+  }
 
-  document.getElementById("tempToggle").addEventListener("change", (e) => {
-    if (e.target.checked) {
-      weatherLayers.temp.addTo(map);
-    } else {
-      map.removeLayer(weatherLayers.temp);
-    }
-  });
+  if (windToggle) {
+    windToggle.addEventListener("change", (e) => {
+      console.log('[WEATHER] Wind toggle:', e.target.checked);
+      if (e.target.checked) {
+        map.addLayer(weatherLayers.wind);
+      } else {
+        map.removeLayer(weatherLayers.wind);
+      }
+    });
+  }
 
-  console.log('[WEATHER] Weather layers initialized');
+  if (tempToggle) {
+    tempToggle.addEventListener("change", (e) => {
+      console.log('[WEATHER] Temperature toggle:', e.target.checked);
+      if (e.target.checked) {
+        map.addLayer(weatherLayers.temp);
+      } else {
+        map.removeLayer(weatherLayers.temp);
+      }
+    });
+  }
+
+  console.log('[WEATHER] Weather layer event listeners attached');
 }
 
 // STATE
