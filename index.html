@@ -62,19 +62,22 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
   border: 1px solid #ccc;
   border-radius: 5px;
   font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
 }
 #weatherLayerControls h4 {
-  margin: 0 0 8px 0;
+  margin: 0 0 10px 0;
   font-size: 14px;
   color: #333;
 }
 .weather-toggle {
-  display: flex;
+  display: grid;
+  grid-template-columns: 20px 1fr;
   align-items: center;
-  justify-content: flex-start;
+  gap: 10px;
   margin-bottom: 8px;
   cursor: pointer;
-  padding: 6px 8px;
+  padding: 4px;
   border-radius: 3px;
   transition: background 0.2s;
 }
@@ -82,18 +85,18 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
   background: #f0f0f0;
 }
 .weather-toggle input[type="checkbox"] {
-  margin: 0 10px 0 0;
+  margin: 0;
   cursor: pointer;
   width: 16px;
   height: 16px;
-  flex-shrink: 0;
 }
 .weather-toggle label {
   cursor: pointer;
   margin: 0;
-  flex: 1;
   user-select: none;
-  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
 </head>
@@ -209,7 +212,6 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
         <label for="tempToggle">Temperature</label>
       </div>
     </div>
-    
     <div id="legendBox"></div>
     <button id="toggleChartType">Switch to Pie Chart</button>
     <div id="chartContainer"><canvas id="industryChart"></canvas></div>
@@ -259,21 +261,70 @@ const weatherLayers = {
   temp: L.tileLayer('/api/weather?type=tile&layer=temperature&z={z}&x={x}&y={y}', { opacity: 0.6 })
 };
 
-document.getElementById("precipToggle")?.addEventListener("change", (e) => {
-  e.target.checked ? map.addLayer(weatherLayers.precipitation) : map.removeLayer(weatherLayers.precipitation);
-});
-document.getElementById("cloudsToggle")?.addEventListener("change", (e) => {
-  e.target.checked ? map.addLayer(weatherLayers.clouds) : map.removeLayer(weatherLayers.clouds);
-});
-document.getElementById("radarToggle")?.addEventListener("change", (e) => {
-  e.target.checked ? map.addLayer(weatherLayers.radar) : map.removeLayer(weatherLayers.radar);
-});
-document.getElementById("windToggle")?.addEventListener("change", (e) => {
-  e.target.checked ? map.addLayer(weatherLayers.wind) : map.removeLayer(weatherLayers.wind);
-});
-document.getElementById("tempToggle")?.addEventListener("change", (e) => {
-  e.target.checked ? map.addLayer(weatherLayers.temp) : map.removeLayer(weatherLayers.temp);
-});
+console.log('Weather layers created:', weatherLayers);
+
+const precipToggle = document.getElementById("precipToggle");
+const cloudsToggle = document.getElementById("cloudsToggle");
+const radarToggle = document.getElementById("radarToggle");
+const windToggle = document.getElementById("windToggle");
+const tempToggle = document.getElementById("tempToggle");
+
+console.log('Toggle elements found:', {precipToggle, cloudsToggle, radarToggle, windToggle, tempToggle});
+
+if(precipToggle) {
+  precipToggle.addEventListener("change", (e) => {
+    console.log('Precipitation toggle:', e.target.checked);
+    if(e.target.checked) {
+      map.addLayer(weatherLayers.precipitation);
+    } else {
+      map.removeLayer(weatherLayers.precipitation);
+    }
+  });
+}
+
+if(cloudsToggle) {
+  cloudsToggle.addEventListener("change", (e) => {
+    console.log('Clouds toggle:', e.target.checked);
+    if(e.target.checked) {
+      map.addLayer(weatherLayers.clouds);
+    } else {
+      map.removeLayer(weatherLayers.clouds);
+    }
+  });
+}
+
+if(radarToggle) {
+  radarToggle.addEventListener("change", (e) => {
+    console.log('Radar toggle:', e.target.checked);
+    if(e.target.checked) {
+      map.addLayer(weatherLayers.radar);
+    } else {
+      map.removeLayer(weatherLayers.radar);
+    }
+  });
+}
+
+if(windToggle) {
+  windToggle.addEventListener("change", (e) => {
+    console.log('Wind toggle:', e.target.checked);
+    if(e.target.checked) {
+      map.addLayer(weatherLayers.wind);
+    } else {
+      map.removeLayer(weatherLayers.wind);
+    }
+  });
+}
+
+if(tempToggle) {
+  tempToggle.addEventListener("change", (e) => {
+    console.log('Temperature toggle:', e.target.checked);
+    if(e.target.checked) {
+      map.addLayer(weatherLayers.temp);
+    } else {
+      map.removeLayer(weatherLayers.temp);
+    }
+  });
+}
 
 // COLORS
 const colors = {
