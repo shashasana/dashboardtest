@@ -23,8 +23,16 @@ module.exports = async (req, res) => {
 
       console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y}`);
       
-      // Use the classic OpenWeatherMap tile API with _new suffix
-      const layerName = layer.includes('_new') ? layer : `${layer}_new`;
+      // Map layer names to OpenWeatherMap layer names
+      const layerMap = {
+        'precipitation': 'precipitation_new',
+        'clouds': 'clouds_new',
+        'radar': 'precipitation_new',
+        'wind': 'wind_new',
+        'temp': 'temp_new',
+        'snow': 'snow_new'
+      };
+      const layerName = layerMap[layer] || (layer.includes('_new') ? layer : `${layer}_new`);
       const tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
       
       console.log(`[WEATHER-TILE] Using layer: ${layerName}. URL: ${tileUrl}`);

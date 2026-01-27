@@ -211,6 +211,10 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
         <input type="checkbox" id="tempToggle" />
         <label for="tempToggle">Temperature</label>
       </div>
+      <div class="weather-toggle">
+        <input type="checkbox" id="snowToggle" />
+        <label for="snowToggle">Snow</label>
+      </div>
     </div>
     <div id="legendBox"></div>
     <button id="toggleChartType">Switch to Pie Chart</button>
@@ -255,23 +259,27 @@ try {
 // WEATHER LAYERS
 const weatherLayers = {
   precipitation: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
-    opacity: 0.9,
+    opacity: 1.0,
     zIndex: 1000
   }),
   clouds: L.tileLayer('/api/weather?type=tile&layer=clouds&z={z}&x={x}&y={y}', { 
-    opacity: 0.9,
+    opacity: 1.0,
     zIndex: 1000
   }),
   radar: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
-    opacity: 0.85,
+    opacity: 1.0,
     zIndex: 1000
   }),
   wind: L.tileLayer('/api/weather?type=tile&layer=wind&z={z}&x={x}&y={y}', { 
-    opacity: 0.85,
+    opacity: 1.0,
     zIndex: 1000
   }),
-  temp: L.tileLayer('/api/weather?type=tile&layer=temperature&z={z}&x={x}&y={y}', { 
-    opacity: 0.9,
+  temp: L.tileLayer('/api/weather?type=tile&layer=temp&z={z}&x={x}&y={y}', { 
+    opacity: 1.0,
+    zIndex: 1000
+  }),
+  snow: L.tileLayer('/api/weather?type=tile&layer=snow&z={z}&x={x}&y={y}', { 
+    opacity: 1.0,
     zIndex: 1000
   })
 };
@@ -305,8 +313,9 @@ const cloudsToggle = document.getElementById("cloudsToggle");
 const radarToggle = document.getElementById("radarToggle");
 const windToggle = document.getElementById("windToggle");
 const tempToggle = document.getElementById("tempToggle");
+const snowToggle = document.getElementById("snowToggle");
 
-console.log('[WEATHER] Toggle elements found:', {precipToggle, cloudsToggle, radarToggle, windToggle, tempToggle});
+console.log('[WEATHER] Toggle elements found:', {precipToggle, cloudsToggle, radarToggle, windToggle, tempToggle, snowToggle});
 
 if(precipToggle) {
   precipToggle.addEventListener("change", (e) => {
@@ -374,6 +383,20 @@ if(tempToggle) {
     } else {
       console.log('[WEATHER] Removing temperature layer from map...');
       map.removeLayer(weatherLayers.temp);
+    }
+  });
+}
+
+if(snowToggle) {
+  snowToggle.addEventListener("change", (e) => {
+    console.log('[WEATHER] Snow toggle:', e.target.checked);
+    if(e.target.checked) {
+      console.log('[WEATHER] Adding snow layer to map...');
+      map.addLayer(weatherLayers.snow);
+      console.log('[WEATHER] Map now has layers:', Object.keys(map._layers).length);
+    } else {
+      console.log('[WEATHER] Removing snow layer from map...');
+      map.removeLayer(weatherLayers.snow);
     }
   });
 }
