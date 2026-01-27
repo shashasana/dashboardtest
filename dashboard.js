@@ -1,8 +1,14 @@
 // MAP INIT
 console.log('[DASHBOARD] Script loaded, waiting for DOMContentLoaded...');
+let map; // Global map variable
 document.addEventListener("DOMContentLoaded", () => {
 console.log('[DASHBOARD] DOMContentLoaded fired, initializing map...');
-const map = L.map("map").setView([39.5,-98.35],4);
+// North America bounds: [south, west], [north, east]
+const northAmericaBounds = [[15, -170], [83, -50]];
+map = L.map("map", {
+  maxBounds: northAmericaBounds,
+  maxBoundsViscosity: 1.0 // Bouncy effect when trying to pan beyond bounds
+}).setView([39.5,-98.35],4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
 // Create a dedicated pane for service-area layers so markers stay clickable
 try {
@@ -22,93 +28,110 @@ const weatherLayers = {
 };
 
 function initWeatherLayers() {
-  console.log('[WEATHER] Initializing weather layers...');
+  console.log('[WEATHER] ===== STARTING WEATHER LAYER INIT =====');
+  console.log('[WEATHER] Map object:', map);
+  console.log('[WEATHER] Map is valid:', map && map.addLayer && typeof map.addLayer === 'function');
   
-  // Helper function to create weather tile layers
-  const createWeatherTileLayer = (layerType, opacity = 0.6) => {
-    return L.tileLayer('/api/weather?type=tile&layer={layer}&z={z}&x={x}&y={y}'
-      .replace('{layer}', layerType), {
-      minZoom: 0,
-      maxZoom: 18,
-      opacity: opacity,
-      attribution: '&copy; OpenWeatherMap',
-      crossOrigin: 'anonymous',
-      errorTileUrl: ''
-    });
-  };
-
-  // Create weather layers
-  weatherLayers.precipitation = createWeatherTileLayer('precipitation', 0.6);
-  weatherLayers.clouds = createWeatherTileLayer('clouds', 0.6);
-  weatherLayers.radar = createWeatherTileLayer('precipitation', 0.7);
-  weatherLayers.wind = createWeatherTileLayer('wind', 0.6);
-  weatherLayers.temp = createWeatherTileLayer('temperature', 0.6);
-
-  console.log('[WEATHER] Weather layers created');
-
-  // Setup event listeners for weather toggles
+  // Check if DOM elements exist
   const precipToggle = document.getElementById("precipToggle");
-  const cloudsToggle = document.getElementById("cloudsToggle");
-  const radarToggle = document.getElementById("radarToggle");
-  const windToggle = document.getElementById("windToggle");
-  const tempToggle = document.getElementById("tempToggle");
+  console.log('[WEATHER] precipToggle element found:', !!precipToggle);
+  if (!precipToggle) {
+    console.error('[WEATHER] Weather toggle elements not found in DOM!');
+    return;
+  }
 
-  if (precipToggle) {
-    precipToggle.addEventListener("change", (e) => {
-      console.log('[WEATHER] Precipitation toggle:', e.target.checked);
+  try {
+    // Create a simple tile layer using standard Leaflet
+    console.log('[WEATHER] Creating tile layer for precipitation...');
+    
+    weatherLayers.precipitation = L.tileLayer(
+      '/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}',
+      {
+        minZoom: 0,
+        maxZoom: 18,
+        opacity: 0.6,
+        attribution: 'OpenWeatherMap',
+        crossOrigin: 'anonymous',
+        errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+      }
+    );
+    console.log('[WEATHER] Precipitation layer created:', !!weatherLayers.precipitation);
+    
+    weatherLayers.clouds = L.tileLayer(
+      '/api/weather?type=tile&layer=clouds&z={z}&x={x}&y={y}',
+      { minZoom: 0, maxZoom: 18, opacity: 0.6, attribution: 'OpenWeatherMap', crossOrigin: 'anonymous' }
+    );
+    
+    weatherLayers.radar = L.tileLayer(
+      '/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}',
+      { minZoom: 0, maxZoom: 18, opacity: 0.7, attribution: 'OpenWeatherMap', crossOrigin: 'anonymous' }
+    );
+    
+    weatherLayers.wind = L.tileLayer(
+      '/api/weather?type=tile&layer=wind&z={z}&x={x}&y={y}',
+      { minZoom: 0, maxZoom: 18, opacity: 0.6, attribution: 'OpenWeatherMap', crossOrigin: 'anonymous' }
+    );
+    
+    weatherLayers.temp = L.tileLayer(
+      '/api/weather?type=tile&layer=temperature&z={z}&x={x}&y={y}',
+      { minZoom: 0, maxZoom: 18, opacity: 0.6, attribution: 'OpenWeatherMap', crossOrigin: 'anonymous' }
+    );
+
+    console.log('[WEATHER] All tile layers created');
+
+    // Setup event listeners
+    document.getElementById("precipToggle").addEventListener("change", (e) => {
+      console.log('[WEATHER] Precipitation toggle changed:', e.target.checked);
       if (e.target.checked) {
+        console.log('[WEATHER] Adding precipitation layer to map');
         map.addLayer(weatherLayers.precipitation);
       } else {
+        console.log('[WEATHER] Removing precipitation layer from map');
         map.removeLayer(weatherLayers.precipitation);
       }
     });
-  }
 
-  if (cloudsToggle) {
-    cloudsToggle.addEventListener("change", (e) => {
-      console.log('[WEATHER] Clouds toggle:', e.target.checked);
+    document.getElementById("cloudsToggle").addEventListener("change", (e) => {
+      console.log('[WEATHER] Clouds toggle changed:', e.target.checked);
       if (e.target.checked) {
         map.addLayer(weatherLayers.clouds);
       } else {
         map.removeLayer(weatherLayers.clouds);
       }
     });
-  }
 
-  if (radarToggle) {
-    radarToggle.addEventListener("change", (e) => {
-      console.log('[WEATHER] Radar toggle:', e.target.checked);
+    document.getElementById("radarToggle").addEventListener("change", (e) => {
+      console.log('[WEATHER] Radar toggle changed:', e.target.checked);
       if (e.target.checked) {
         map.addLayer(weatherLayers.radar);
       } else {
         map.removeLayer(weatherLayers.radar);
       }
     });
-  }
 
-  if (windToggle) {
-    windToggle.addEventListener("change", (e) => {
-      console.log('[WEATHER] Wind toggle:', e.target.checked);
+    document.getElementById("windToggle").addEventListener("change", (e) => {
+      console.log('[WEATHER] Wind toggle changed:', e.target.checked);
       if (e.target.checked) {
         map.addLayer(weatherLayers.wind);
       } else {
         map.removeLayer(weatherLayers.wind);
       }
     });
-  }
 
-  if (tempToggle) {
-    tempToggle.addEventListener("change", (e) => {
-      console.log('[WEATHER] Temperature toggle:', e.target.checked);
+    document.getElementById("tempToggle").addEventListener("change", (e) => {
+      console.log('[WEATHER] Temperature toggle changed:', e.target.checked);
       if (e.target.checked) {
         map.addLayer(weatherLayers.temp);
       } else {
         map.removeLayer(weatherLayers.temp);
       }
     });
-  }
 
-  console.log('[WEATHER] Weather layer event listeners attached');
+    console.log('[WEATHER] ===== WEATHER LAYERS INITIALIZED SUCCESSFULLY =====');
+  } catch (err) {
+    console.error('[WEATHER] Error initializing weather layers:', err);
+    console.error(err.stack);
+  }
 }
 
 // STATE
