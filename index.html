@@ -40,6 +40,10 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
 #resetLegend { margin-bottom:10px; padding:5px; background:#e74c3c; color:white; border:none; border-radius:3px; cursor:pointer; }
 #resetLegend:hover { background:#c0392b; }
 #map { width:100%; height:100%; }
+/* Enhanced weather layer styling - darker, more saturated colors */
+.weather-layer-enhanced {
+  filter: contrast(1.5) saturate(1.8) brightness(0.95) !important;
+}
 #chartContainer { width:100%; height:450px; margin-bottom:10px; }
 #industryChart { width:100%; height:100%; }
 .temp-label {
@@ -260,27 +264,32 @@ try {
   if (p) { p.style.zIndex = 350; }
 } catch(_) {}
 
-// WEATHER LAYERS
+// WEATHER LAYERS - with enhanced visual filters for better visibility
 const weatherLayers = {
   precipitation: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
     opacity: 1.0,
-    zIndex: 1000
+    zIndex: 1000,
+    className: 'weather-layer-enhanced'
   }),
   clouds: L.tileLayer('/api/weather?type=tile&layer=clouds&z={z}&x={x}&y={y}', { 
     opacity: 1.0,
-    zIndex: 1000
+    zIndex: 1000,
+    className: 'weather-layer-enhanced'
   }),
   radar: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
     opacity: 1.0,
-    zIndex: 1000
+    zIndex: 1000,
+    className: 'weather-layer-enhanced'
   }),
   wind: L.tileLayer('/api/weather?type=tile&layer=wind&z={z}&x={x}&y={y}', { 
     opacity: 1.0,
-    zIndex: 1000
+    zIndex: 1000,
+    className: 'weather-layer-enhanced'
   }),
   temp: L.tileLayer('/api/weather?type=tile&layer=temp&z={z}&x={x}&y={y}', { 
     opacity: 1.0,
-    zIndex: 1000
+    zIndex: 1000,
+    className: 'weather-layer-enhanced'
   }),
   snow: L.tileLayer('/api/weather?type=tile&layer=snow&z={z}&x={x}&y={y}', { 
     opacity: 1.0,
