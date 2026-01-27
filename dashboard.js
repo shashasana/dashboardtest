@@ -128,6 +128,17 @@ function initWeatherLayers() {
     });
 
     console.log('[WEATHER] ===== WEATHER LAYERS INITIALIZED SUCCESSFULLY =====');
+    
+    // Auto-enable precipitation layer after 2 seconds for testing
+    setTimeout(() => {
+      console.log('[WEATHER] AUTO-TEST: Enabling precipitation layer');
+      const testToggle = document.getElementById("precipToggle");
+      if (testToggle) {
+        testToggle.checked = true;
+        testToggle.dispatchEvent(new Event('change'));
+      }
+    }, 2000);
+    
   } catch (err) {
     console.error('[WEATHER] Error initializing weather layers:', err);
     console.error(err.stack);
