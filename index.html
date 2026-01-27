@@ -255,23 +255,23 @@ try {
 // WEATHER LAYERS
 const weatherLayers = {
   precipitation: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
-    opacity: 0.6,
+    opacity: 0.9,
     zIndex: 1000
   }),
   clouds: L.tileLayer('/api/weather?type=tile&layer=clouds&z={z}&x={x}&y={y}', { 
-    opacity: 0.6,
+    opacity: 0.9,
     zIndex: 1000
   }),
   radar: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
-    opacity: 0.7,
+    opacity: 0.85,
     zIndex: 1000
   }),
   wind: L.tileLayer('/api/weather?type=tile&layer=wind&z={z}&x={x}&y={y}', { 
-    opacity: 0.6,
+    opacity: 0.85,
     zIndex: 1000
   }),
   temp: L.tileLayer('/api/weather?type=tile&layer=temperature&z={z}&x={x}&y={y}', { 
-    opacity: 0.6,
+    opacity: 0.9,
     zIndex: 1000
   })
 };
