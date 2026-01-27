@@ -34,11 +34,12 @@ module.exports = async (req, res) => {
       };
       const layerName = layerMap[layer] || (layer.includes('_new') ? layer : `${layer}_new`);
       
-      // Custom color palettes - darker gradients for better visibility
+      // Custom color palettes - vibrant like zoom.earth
       const palettes = {
-        'snow_new': '0:00000000;0.1:1A3A52;0.5:0F2437;1:0A1829;2:050D16;5:030A10;10:020608;50:000000',
-        'clouds_new': '0:00000000;5:808080;15:666666;30:555555;50:404040;70:2a2a2a;90:1a1a1a;100:000000',
-        'precipitation_new': '0:00000000;0.1:664400;1:552200;2:441100;5:330000;10:220000;20:110000;50:000000'
+        'snow_new': '0:00000000;0.1:87CEEB;0.5:4169E1;1:1E90FF;2:0047AB;5:00008B;10:000080;50:0000CD',
+        'clouds_new': '0:00000000;5:E0FFFF;15:ADD8E6;30:87CEEB;50:4169E1;70:1E90FF;90:0000CD;100:00008B',
+        'precipitation_new': '0:00000000;0.1:FFFFCC;0.5:FFFF99;1:FFFF00;2:FFDD00;5:FF8C00;10:FF4500;20:FF0000;50:8B0000',
+        'wind_new': '0:00000000;1:FFFFFF;5:CCFFFF;10:AAFFAA;20:FFFF00;40:FFB300;80:FF6600;120:FF0000;200:CC0000'
       };
       
       let tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
