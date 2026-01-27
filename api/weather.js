@@ -23,34 +23,20 @@ module.exports = async (req, res) => {
 
       console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y}`);
       
-      // Map to Weather Maps 2.0 API layer codes
+      // Use the classic tile API with colored layer names
       const layerMap = {
-        'precipitation': 'PR0',
-        'clouds': 'CL',
-        'radar': 'PR0',
-        'wind': 'WNDUV',
-        'temp': 'TA2',
-        'snow': 'SD0'
+        'precipitation': 'precipitation_new',
+        'clouds': 'clouds_new', 
+        'radar': 'precipitation_new',
+        'wind': 'wind_new',
+        'temp': 'temp_new',
+        'snow': 'snow_new'
       };
-      const layerCode = layerMap[layer] || layer;
+      const layerName = layerMap[layer] || layer;
       
-      // Vibrant zoom.earth style palettes for Weather Maps 2.0 API
-      const palettes = {
-        'PR0': '0:00000000;0.1:FFFFCC;0.5:FFFF99;1:FFFF00;2:FFDD00;5:FF8C00;10:FF4500;20:FF0000;50:8B0000',
-        'CL': '0:FFFFFF00;10:E0FFFF;20:ADD8E6;30:87CEEB;50:4169E1;70:1E90FF;90:0000CD;100:00008B',
-        'SD0': '0:00000000;0.1:87CEEB;0.5:4169E1;1:1E90FF;2:0047AB;5:00008B;10:000080;50:0000CD',
-        'WNDUV': '0:00000000;1:FFFFFF;5:CCFFFF;10:AAFFAA;20:FFFF00;40:FFB300;80:FF6600;120:FF0000;200:CC0000',
-        'TA2': '-65:821692;-55:821692;-45:821692;-40:821692;-30:8257DB;-20:208CEC;-10:20C4E8;0:23DDDD;10:C2FF28;20:FFF028;25:FFC228;30:FC8014'
-      };
+      let tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
       
-      let tileUrl = `https://maps.openweathermap.org/maps/2.0/weather/1h/${layerCode}/${z}/${x}/${y}.png?appid=${apiKey}`;
-      
-      // Add custom palette and fill_bound for vibrant colors
-      if (palettes[layerCode]) {
-        tileUrl += `&palette=${encodeURIComponent(palettes[layerCode])}&fill_bound=true`;
-      }
-      
-      console.log(`[WEATHER-TILE] Using 2.0 API: ${layerCode}. URL: ${tileUrl.substring(0, 150)}...`);
+      console.log(`[WEATHER-TILE] Using classic API: ${layerName}. URL: ${tileUrl.substring(0, 150)}...`);
       
       console.log(`[WEATHER-TILE] Using layer: ${layerName}. URL: ${tileUrl}`);
       
@@ -59,24 +45,16 @@ module.exports = async (req, res) => {
         
         if (!tileResponse.ok) {
           console.error(`[WEATHER-TILE] HTTP Error ${tileResponse.status}: ${tileResponse.statusText}`);
-          console.error(`[WEATHER-TILE] Response headers:`, Object.fromEntries(tileResponse.headers));
           
           // Log response body to understand the error
           const text = await tileResponse.text();
           console.error(`[WEATHER-TILE] Response body:`, text);
           
-          // Return a transparent 1x1 PNG on error
-          const transparentPng = Buffer.from([
-            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-            0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-            0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
-            0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-            0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
-            0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
-          ]);
-          res.setHeader('Content-Type', 'image/png');
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-          return res.status(200).send(transparentPng);
+          // Send error response instead of silent transparent PNG for debugging
+          return res.status(500).json({ 
+            error: `Tile API failed: ${tileResponse.status}`,
+            details: text 
+          });
         }
 
         // Set proper headers for image response
