@@ -44,10 +44,12 @@ module.exports = async (req, res) => {
       
       let tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
       
-      // Add custom palette if available
+      // Add custom palette and fill_bound for better color rendering
       if (palettes[layerName]) {
-        tileUrl += `&palette=${encodeURIComponent(palettes[layerName])}`;
+        tileUrl += `&palette=${encodeURIComponent(palettes[layerName])}&fill_bound=true`;
       }
+      
+      console.log(`[WEATHER-TILE] Final URL: ${tileUrl.substring(0, 200)}...`);
       
       console.log(`[WEATHER-TILE] Using layer: ${layerName}. URL: ${tileUrl}`);
       
