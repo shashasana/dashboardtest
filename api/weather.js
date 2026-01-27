@@ -33,7 +33,19 @@ module.exports = async (req, res) => {
         'snow': 'snow_new'
       };
       const layerName = layerMap[layer] || (layer.includes('_new') ? layer : `${layer}_new`);
-      const tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
+      
+      // Custom color palettes for better visibility
+      const palettes = {
+        'snow_new': '0:00000000;0.1:E3F2FD;0.5:90CAF9;1:42A5F5;2:1E88E5;5:1565C0;10:0D47A1;50:001F3F',
+        'clouds_new': '0:00000000;10:E0E0E0;30:BDBDBD;50:9E9E9E;70:757575;90:616161;100:424242'
+      };
+      
+      let tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
+      
+      // Add custom palette if available
+      if (palettes[layerName]) {
+        tileUrl += `&palette=${encodeURIComponent(palettes[layerName])}`;
+      }
       
       console.log(`[WEATHER-TILE] Using layer: ${layerName}. URL: ${tileUrl}`);
       
