@@ -217,6 +217,10 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
       </div>
     </div>
     <div id="legendBox"></div>
+    <div id="apiStats" style="margin-top: auto; padding: 10px; background: #f0f0f0; border-radius: 5px; text-align: center; font-size: 12px; color: #666;">
+      <strong>API Calls Today</strong><br>
+      <span id="apiCallCount">0</span>
+    </div>
     <button id="toggleChartType">Switch to Pie Chart</button>
     <div id="chartContainer"><canvas id="industryChart"></canvas></div>
   </div>
@@ -286,6 +290,25 @@ const weatherLayers = {
 
 console.log('[WEATHER] Weather layers created:', weatherLayers);
 console.log('[WEATHER] Sample tile URL:', '/api/weather?type=tile&layer=precipitation&z=4&x=3&y=5');
+
+// API Call Counter
+async function updateApiCallCounter() {
+  try {
+    const response = await fetch('/api/weather?type=stats');
+    if (response.ok) {
+      const data = await response.json();
+      document.getElementById('apiCallCount').textContent = data.apiCalls;
+      console.log(`[API STATS] OpenWeather API calls today: ${data.apiCalls}`);
+    }
+  } catch (error) {
+    console.error('[API STATS] Failed to fetch stats:', error);
+  }
+}
+
+// Update counter every 5 seconds
+setInterval(updateApiCallCounter, 5000);
+// Initial update
+updateApiCallCounter();
 
 // TEST: Add a simple colored overlay to verify layer rendering works
 const testOverlay = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { 

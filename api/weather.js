@@ -1,11 +1,30 @@
+// Track API calls per day (resets on server restart/redeploy)
+let apiCallCount = 0;
+let currentDate = new Date().toDateString();
+
 module.exports = async (req, res) => {
   try {
+    // Reset counter if date changed
+    const today = new Date().toDateString();
+    if (today !== currentDate) {
+      apiCallCount = 0;
+      currentDate = today;
+    }
+    
     const apiKey = process.env.OPENWEATHER_API_KEY;
     
     if (!apiKey) {
       console.error("OPENWEATHER_API_KEY not configured");
       return res.status(500).json({ 
         error: 'API key not configured'
+      });
+    }
+    
+    // Handle stats request
+    if (req.query.type === 'stats') {
+      return res.status(200).json({ 
+        apiCalls: apiCallCount,
+        date: currentDate
       });
     }
 
@@ -17,6 +36,8 @@ module.exports = async (req, res) => {
     
     // Handle tile requests
     if (type === 'tile') {
+      apiCallCount++; // Increment counter for each tile request
+      
       if (!layer || !z || !x || !y) {
         return res.status(400).json({ error: 'Missing tile parameters: layer, z, x, y' });
       }
