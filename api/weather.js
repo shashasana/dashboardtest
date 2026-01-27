@@ -23,33 +23,34 @@ module.exports = async (req, res) => {
 
       console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y}`);
       
-      // Map layer names to OpenWeatherMap layer names
+      // Map to Weather Maps 2.0 API layer codes
       const layerMap = {
-        'precipitation': 'precipitation_new',
-        'clouds': 'clouds_new',
-        'radar': 'precipitation_new',
-        'wind': 'wind_new',
-        'temp': 'temp_new',
-        'snow': 'snow_new'
+        'precipitation': 'PR0',
+        'clouds': 'CL',
+        'radar': 'PR0',
+        'wind': 'WNDUV',
+        'temp': 'TA2',
+        'snow': 'SD0'
       };
-      const layerName = layerMap[layer] || (layer.includes('_new') ? layer : `${layer}_new`);
+      const layerCode = layerMap[layer] || layer;
       
-      // Custom color palettes - vibrant like zoom.earth
+      // Vibrant zoom.earth style palettes for Weather Maps 2.0 API
       const palettes = {
-        'snow_new': '0:00000000;0.1:87CEEB;0.5:4169E1;1:1E90FF;2:0047AB;5:00008B;10:000080;50:0000CD',
-        'clouds_new': '0:00000000;5:E0FFFF;15:ADD8E6;30:87CEEB;50:4169E1;70:1E90FF;90:0000CD;100:00008B',
-        'precipitation_new': '0:00000000;0.1:FFFFCC;0.5:FFFF99;1:FFFF00;2:FFDD00;5:FF8C00;10:FF4500;20:FF0000;50:8B0000',
-        'wind_new': '0:00000000;1:FFFFFF;5:CCFFFF;10:AAFFAA;20:FFFF00;40:FFB300;80:FF6600;120:FF0000;200:CC0000'
+        'PR0': '0:00000000;0.1:FFFFCC;0.5:FFFF99;1:FFFF00;2:FFDD00;5:FF8C00;10:FF4500;20:FF0000;50:8B0000',
+        'CL': '0:FFFFFF00;10:E0FFFF;20:ADD8E6;30:87CEEB;50:4169E1;70:1E90FF;90:0000CD;100:00008B',
+        'SD0': '0:00000000;0.1:87CEEB;0.5:4169E1;1:1E90FF;2:0047AB;5:00008B;10:000080;50:0000CD',
+        'WNDUV': '0:00000000;1:FFFFFF;5:CCFFFF;10:AAFFAA;20:FFFF00;40:FFB300;80:FF6600;120:FF0000;200:CC0000',
+        'TA2': '-65:821692;-55:821692;-45:821692;-40:821692;-30:8257DB;-20:208CEC;-10:20C4E8;0:23DDDD;10:C2FF28;20:FFF028;25:FFC228;30:FC8014'
       };
       
-      let tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
+      let tileUrl = `https://maps.openweathermap.org/maps/2.0/weather/1h/${layerCode}/${z}/${x}/${y}.png?appid=${apiKey}`;
       
-      // Add custom palette and fill_bound for better color rendering
-      if (palettes[layerName]) {
-        tileUrl += `&palette=${encodeURIComponent(palettes[layerName])}&fill_bound=true`;
+      // Add custom palette and fill_bound for vibrant colors
+      if (palettes[layerCode]) {
+        tileUrl += `&palette=${encodeURIComponent(palettes[layerCode])}&fill_bound=true`;
       }
       
-      console.log(`[WEATHER-TILE] Final URL: ${tileUrl.substring(0, 200)}...`);
+      console.log(`[WEATHER-TILE] Using 2.0 API: ${layerCode}. URL: ${tileUrl.substring(0, 150)}...`);
       
       console.log(`[WEATHER-TILE] Using layer: ${layerName}. URL: ${tileUrl}`);
       
