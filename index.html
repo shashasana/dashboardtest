@@ -67,6 +67,16 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
 .temp-label::before {
   display: none !important;
 }
+/* Enhanced weather layer styling - DRAMATIC colors for intensity */
+.weather-layer-enhanced {
+  filter: contrast(3.5) saturate(4.2) brightness(0.55) hue-rotate(15deg) !important;
+}
+.weather-layer-temp {
+  filter: contrast(4.0) saturate(5.0) brightness(0.65) !important;
+}
+.weather-layer-clouds {
+  filter: brightness(0.2) contrast(3.2) invert(0.15) !important;
+}
 #weatherLayerControls {
   margin: 10px 0;
   padding: 10px;
@@ -230,6 +240,36 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
         <input type="checkbox" id="snowToggle" />
         <label for="snowToggle">Snow</label>
       </div>
+      <!-- Temperature Intensity Legend -->
+      <div id="temperatureLegend" style="margin-top:12px; padding:10px; background:#f9f9f9; border:1px solid #ddd; border-radius:4px; display:none;">
+        <h5 style="margin:0 0 8px 0; font-size:12px; color:#333;">Temperature Intensity</h5>
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:11px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:20px; height:20px; background:#8B0000; border-radius:2px;"></div>
+            <span>Extreme Heat (&gt;40°C)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:20px; height:20px; background:#FF4500; border-radius:2px;"></div>
+            <span>Very Hot (30-40°C)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:20px; height:20px; background:#FF8C00; border-radius:2px;"></div>
+            <span>Hot (20-30°C)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:20px; height:20px; background:#FFD700; border-radius:2px;"></div>
+            <span>Warm (10-20°C)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:20px; height:20px; background:#87CEEB; border-radius:2px;"></div>
+            <span>Cool (0-10°C)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:20px; height:20px; background:#4169E1; border-radius:2px;"></div>
+            <span>Cold (&lt;0°C)</span>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="legendBox"></div>
     <button id="toggleChartType">Switch to Pie Chart</button>
@@ -308,7 +348,7 @@ const weatherLayers = {
     opacity: 0.85,
     zIndex: 1000,
     bounds: usaBoundsLatLng,
-    className: 'weather-layer-enhanced'
+    className: 'weather-layer-enhanced weather-layer-temp'
   }),
   snow: L.tileLayer('/api/weather?type=tile&layer=snow&z={z}&x={x}&y={y}', { 
     opacity: 0.9,
@@ -470,13 +510,16 @@ if(windToggle) {
 if(tempToggle) {
   tempToggle.addEventListener("change", (e) => {
     console.log('[WEATHER] Temperature toggle:', e.target.checked);
+    const tempLegend = document.getElementById("temperatureLegend");
     if(e.target.checked) {
       console.log('[WEATHER] Adding temperature layer to map...');
       map.addLayer(weatherLayers.temp);
+      if(tempLegend) tempLegend.style.display = "block";
       console.log('[WEATHER] Map now has layers:', Object.keys(map._layers).length);
     } else {
       console.log('[WEATHER] Removing temperature layer from map...');
       map.removeLayer(weatherLayers.temp);
+      if(tempLegend) tempLegend.style.display = "none";
     }
   });
 }
