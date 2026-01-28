@@ -323,20 +323,24 @@ let lastLoggedCount = 0;
 
 async function updateApiCallCounter() {
   try {
-    const response = await fetch('/api/weather?type=stats');
+    // Fetch total from Google Sheet instead of session
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'getTotalApiCalls'
+      })
+    });
+    
     if (response.ok) {
-      const data = await response.json();
-      document.getElementById('apiCallCount').textContent = data.apiCalls;
-      console.log(`[API STATS] OpenWeather API calls in session: ${data.apiCalls}`);
-      
-      // Log to Google Sheet every 60 seconds if count changed
-      if (data.apiCalls !== lastLoggedCount && data.apiCalls > 0) {
-        lastLoggedCount = data.apiCalls;
-        logToGoogleSheet(data);
+      const result = await response.json();
+      if (result.success && result.data) {
+        const total = result.data.total || 0;
+        document.getElementById('apiCallCount').textContent = total;
+        console.log(`[API STATS] Total OpenWeather API calls: ${total}`);
       }
     }
   } catch (error) {
-    console.error('[API STATS] Failed to fetch stats:', error);
+    console.error('[API STATS] Failed to fetch total:', error);
   }
 }
 
@@ -500,7 +504,7 @@ const colors = {
 
 // GOOGLE SHEET CONFIG
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjoEatSOAEVL0G21RaUJaKBtBWpCspkfl4RJmIMWi27dAvCwW7QIA9WfTgwrtfM5Y5/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyDHVGUsTh79JysZW0D25p3aVpsIkQJ7jy1ZxUzVPrI7518xn2P-mSOXTcM9I7TdwsW/exec";
 
 // GEOCODE LOCATION
 async function geocodeLocation(location) {

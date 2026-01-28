@@ -136,8 +136,13 @@ function getPolygonData(entry) {
 // HANDLE POST REQUESTS (for database operations)
 function doPost(e) {
   try {
+    Logger.log("doPost received: " + e.postData.contents);
+    
     const payload = JSON.parse(e.postData.contents);
     const action = payload.action;
+    
+    Logger.log("Parsed payload action: " + action);
+    Logger.log("Payload data: " + JSON.stringify(payload.data));
     
     // Ensure sheets exist
     ensureSheets();
@@ -153,7 +158,12 @@ function doPost(e) {
     } else if (action === "permanentlyDelete") {
       return permanentlyDelete(payload.index);
     } else if (action === "logApiCall") {
-      return logApiCallData(payload.data);
+      // Handle both payload.data and direct payload properties
+      const dataToLog = payload.data || payload;
+      Logger.log("logApiCall action detected, calling logApiCallData with: " + JSON.stringify(dataToLog));
+      return logApiCallData(dataToLog);
+    } else if (action === "getTotalApiCalls") {
+      return getTotalApiCalls();
     } else if (action === "getDatabase") {
       return getDatabase();
     } else if (action === "editClient") {
@@ -360,12 +370,21 @@ function returnError(message) {
   ).setMimeType(ContentService.MimeType.JSON);
 }
 
-// LOG API CALL DATA TO LOGS SHEET
+// LOG API CALL DATA TO LOGS SHEET (Daily Total)
 function logApiCallData(params) {
   try {
-    if (!params || params.apiCalls === undefined) {
-      Logger.log("Invalid params received: " + JSON.stringify(params));
-      return returnError("Missing apiCalls parameter");
+    Logger.log("logApiCallData called with params: " + JSON.stringify(params));
+    
+    if (!params) {
+      Logger.log("params is null or undefined");
+      return returnError("params is null or undefined");
+    }
+    
+    const apiCalls = params.apiCalls !== undefined ? parseInt(params.apiCalls) : 0;
+    
+    if (isNaN(apiCalls)) {
+      Logger.log("Invalid apiCalls value: " + params.apiCalls);
+      return returnError("Invalid apiCalls value");
     }
     
     const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -384,18 +403,66 @@ function logApiCallData(params) {
     const now = new Date();
     const date = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     const time = Utilities.formatDate(now, Session.getScriptTimeZone(), 'HH:mm:ss');
-    const apiCalls = parseInt(params.apiCalls) || 0;
     
-    sheet.appendRow([
-      date,
-      time,
-      apiCalls
-    ]);
+    // Check if entry for today already exists
+    const values = sheet.getDataRange().getValues();
+    let todayRowIndex = -1;
     
-    Logger.log("API call logged to logs sheet: " + apiCalls);
-    return returnSuccess("API call logged successfully");
+    for (let i = 1; i < values.length; i++) {
+      if (values[i][0] === date) {
+        todayRowIndex = i;
+        break;
+      }
+    }
+    
+    if (todayRowIndex !== -1) {
+      // Update existing entry for today
+      sheet.getRange(todayRowIndex + 1, 2, 1, 2).setValues([[time, apiCalls]]);
+      Logger.log("API calls updated for today: " + apiCalls);
+    } else {
+      // Create new entry for today
+      sheet.appendRow([date, time, apiCalls]);
+      Logger.log("New daily entry created: " + apiCalls);
+    }
+    
+    return returnSuccess("Daily API calls logged successfully");
   } catch (error) {
     Logger.log("Error in logApiCallData: " + error.toString());
     return returnError("Failed to log API call: " + error.toString());
+  }
+}
+
+// GET TOTAL API CALLS FROM LOGS SHEET
+function getTotalApiCalls() {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    if (!ss) {
+      return returnError("Could not open spreadsheet");
+    }
+    
+    let sheet = ss.getSheetByName(LOGS_SHEET);
+    
+    if (!sheet) {
+      return returnSuccess("No logs found", { total: 0, lastUpdated: null });
+    }
+    
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) {
+      return returnSuccess("No logs found", { total: 0, lastUpdated: null });
+    }
+    
+    // Get the last entry (most recent)
+    const lastEntry = values[values.length - 1];
+    const total = parseInt(lastEntry[2]) || 0;
+    const lastUpdated = lastEntry[0];
+    
+    Logger.log("Retrieved total API calls: " + total);
+    
+    return ContentService.createTextOutput(
+      JSON.stringify({ success: true, data: { total: total, lastUpdated: lastUpdated } })
+    ).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    Logger.log("Error in getTotalApiCalls: " + error.toString());
+    return returnError("Failed to get total API calls: " + error.toString());
   }
 }
