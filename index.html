@@ -258,17 +258,17 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("Authenticated, showing dashboard");
   document.getElementById("accessDenied").style.display = "none";
 
-// MAP INIT
-const usaBounds = [[24.396308, -125.0], [49.384358, -66.93457]];
+// MAP INIT - Tighter bounds to show only USA mainland
+const usaBounds = [[28.5, -125.0], [49.384358, -66.93457]]; // Raised southern boundary to exclude Mexico
 const map = L.map("map", {
   maxBounds: usaBounds,
   maxBoundsViscosity: 1.0,
   minZoom: 5,
   maxZoom: 18,
   dragging: true
-}).setView([40.5, -100], 5.5);
-// Fit map to bounds and prevent any panning outside
-map.fitBounds(usaBounds, { padding: [50, 50] });
+});
+// Fit map tightly to USA bounds only
+map.fitBounds(usaBounds, { padding: [20, 20], maxZoom: 5.5 });
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ attribution:"&copy; OpenStreetMap" }).addTo(map);
 // Create a dedicated pane for service-area layers so markers remain clickable
 try {
