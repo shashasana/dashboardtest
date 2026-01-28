@@ -451,12 +451,17 @@ function getTotalApiCalls() {
       return returnSuccess("No logs found", { total: 0, lastUpdated: null });
     }
     
-    // Get the last entry (most recent)
-    const lastEntry = values[values.length - 1];
-    const total = parseInt(lastEntry[2]) || 0;
-    const lastUpdated = lastEntry[0];
+    // Sum all API calls from column C (index 2)
+    let total = 0;
+    let lastUpdated = null;
     
-    Logger.log("Retrieved total API calls: " + total);
+    for (let i = 1; i < values.length; i++) {
+      const callCount = parseInt(values[i][2]) || 0;
+      total += callCount;
+      lastUpdated = values[i][0]; // Keep track of last date
+    }
+    
+    Logger.log("Retrieved total API calls (summed): " + total);
     
     return ContentService.createTextOutput(
       JSON.stringify({ success: true, data: { total: total, lastUpdated: lastUpdated } })
