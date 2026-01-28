@@ -27,11 +27,11 @@
 </script>
 <!-- LOGIN SCRIPT END -->
 <style>
-body { margin:0; font-family: Arial, sans-serif; height:100vh; }
-#container { display:grid; grid-template-columns:360px 1fr; height:100vh; }
+body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden; }
+#container { display:grid; grid-template-columns:1fr; height:100vh; }
 #accessDenied { display: none; text-align: center; padding: 50px; font-size: 24px; color: #c0392b; }
 #accessDenied.show { display: block; }
-#sidebar { background:#f5f5f5; padding:15px; overflow-y:auto; border-right:1px solid #ccc; display:flex; flex-direction:column; }
+#sidebar { display: none; background:#f5f5f5; padding:15px; overflow-y:auto; border-right:1px solid #ccc; flex-direction:column; }
 #sidebar input, #sidebar select, #sidebar button { width:100%; padding:8px; margin-bottom:10px; box-sizing:border-box; }
 #sidebar select[multiple] { height:250px; min-height:150px; overflow-y:auto; display:none; }
 #legendBox { margin:10px 0; padding:10px; background:white; border:1px solid #ccc; border-radius:5px; font-size:13px; display:flex; flex-direction:column; }
@@ -48,23 +48,9 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
 .weather-layer-clouds {
   filter: brightness(0.15) contrast(3.0) invert(0.2) !important;
 }
-/* API counter at bottom of map */
+/* API counter at bottom of map - REMOVED */
 .leaflet-bottom.leaflet-left {
-  margin-bottom: 50px !important;
-}
-#mapApiCounter {
-  position: absolute;
-  bottom: 5px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.95);
-  padding: 5px 15px;
-  border-radius: 5px;
-  font-size: 11px;
-  color: #333;
-  z-index: 1000;
-  box-shadow: 0 1px 5px rgba(0,0,0,0.2);
-  pointer-events: none;
+  margin-bottom: 10px !important;
 }
 #chartContainer { width:100%; height:450px; margin-bottom:10px; }
 #industryChart { width:100%; height:100%; }
@@ -250,9 +236,7 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
     <div id="chartContainer"><canvas id="industryChart"></canvas></div>
   </div>
   <div id="map">
-    <div id="mapApiCounter">
-      <!-- <strong>API Calls (Session):</strong> <span id="apiCallCount">0</span> -->
-    </div>
+    <!-- API counter removed for fullscreen map -->
   </div>
 </div>
 <div id="accessDenied">
