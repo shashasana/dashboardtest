@@ -319,21 +319,59 @@ console.log('[WEATHER] Weather layers created:', weatherLayers);
 console.log('[WEATHER] Sample tile URL:', '/api/weather?type=tile&layer=precipitation&z=4&x=3&y=5');
 
 // API Call Counter
+let lastLoggedCount = 0;
+
 async function updateApiCallCounter() {
   try {
     const response = await fetch('/api/weather?type=stats');
     if (response.ok) {
       const data = await response.json();
       document.getElementById('apiCallCount').textContent = data.apiCalls;
-      console.log(`[API STATS] OpenWeather API calls today: ${data.apiCalls}`);
+      console.log(`[API STATS] OpenWeather API calls in session: ${data.apiCalls}`);
+      
+      // Log to Google Sheet every 60 seconds if count changed
+      if (data.apiCalls !== lastLoggedCount && data.apiCalls > 0) {
+        lastLoggedCount = data.apiCalls;
+        logToGoogleSheet(data);
+      }
     }
   } catch (error) {
     console.error('[API STATS] Failed to fetch stats:', error);
   }
 }
 
+async function logToGoogleSheet(statsData) {
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'logApiCall',
+        data: {
+          apiCalls: statsData.apiCalls,
+          sessionStart: statsData.sessionStart
+        }
+      })
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success) {
+        console.log('[API STATS] Logged to Google Sheet:', statsData.apiCalls);
+      }
+    }
+  } catch (error) {
+    console.error('[API STATS] Failed to log to Google Sheet:', error);
+  }
+}
+
 // Update counter every 5 seconds
 setInterval(updateApiCallCounter, 5000);
+// Log to sheet every 60 seconds
+setInterval(() => {
+  if (lastLoggedCount > 0) {
+    updateApiCallCounter();
+  }
+}, 60000);
 // Initial update
 updateApiCallCounter();
 
@@ -462,7 +500,7 @@ const colors = {
 
 // GOOGLE SHEET CONFIG
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwEViyLcgpTqFNElzY9b18o-nP0um-E1HNmavEpazC2VEGyEyEr3kUBVLMLeghSnjZA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjoEatSOAEVL0G21RaUJaKBtBWpCspkfl4RJmIMWi27dAvCwW7QIA9WfTgwrtfM5Y5/exec";
 
 // GEOCODE LOCATION
 async function geocodeLocation(location) {

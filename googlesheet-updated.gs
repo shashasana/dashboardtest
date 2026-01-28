@@ -18,6 +18,7 @@ const SHEET_ID = "10HaJdMVaqasoR1mrX39iP58hIMvrWV8GTztUX7_rVZM"; // Replace with
 const DATABASE_SHEET = "Database";
 const TRASH_SHEET = "Trash";
 const API_LOGS_SHEET = "API Logs";
+const LOGS_SHEET = "logs";
 
 // HANDLE GET REQUESTS (for polygon fetching)
 function doGet(e) {
@@ -26,10 +27,6 @@ function doGet(e) {
     
     if (action === "getPolygon") {
       return getPolygonData(e.parameter.entry);
-    }
-    
-    if (action === "logApiCall") {
-      return logApiCallData(e.parameter);
     }
     
     return returnError("Unknown GET action");
@@ -213,6 +210,12 @@ function ensureSheets() {
     const sheet = ss.getSheetByName(API_LOGS_SHEET);
     sheet.appendRow(["Timestamp", "Date", "Time", "API Calls", "Session Start"]);
   }
+  
+  if (!ss.getSheetByName(LOGS_SHEET)) {
+    ss.insertSheet(LOGS_SHEET);
+    const sheet = ss.getSheetByName(LOGS_SHEET);
+    sheet.appendRow(["Date", "Time", "Number of calls"]);
+  }
 }
 
 function addClient(data) {
@@ -274,12 +277,10 @@ function getTrash() {
     const trash = [];
     
     for (let i = 1; i < values.length; i++) {
-      trash.push([values[i][0], values[i][1], values[i][2], values[i][3], values[i][4], values[i][5]]);
+      trash.push(values[i]); // Include all columns including Deleted Date
     }
     
-    return ContentService.createTextOutput(
-      JSON.stringify({ success: true, trash: trash })
-    ).setMimeType(ContentService.MimeType.JSON);
+    return returnSuccess("Trash loaded", trash);
   } catch (error) {
     return returnError("Failed to load trash: " + error.toString());
   }
@@ -292,9 +293,9 @@ function restoreClient(index) {
     const dbSheet = ss.getSheetByName(DATABASE_SHEET);
     
     const values = trashSheet.getDataRange().getValues();
-    if (index + 1 < values.length) {
+    if (index >= 0 && index < values.length - 1) {
       const row = values[index + 1];
-      dbSheet.appendRow([row[0], row[1], row[2], row[3], row[4], row[5]]);
+      dbSheet.appendRow(row.slice(0, 6)); // Only first 6 columns for Database
       trashSheet.deleteRow(index + 2);
       return returnSuccess("Client restored");
     }
@@ -310,8 +311,12 @@ function permanentlyDelete(index) {
     const ss = SpreadsheetApp.openById(SHEET_ID);
     const trashSheet = ss.getSheetByName(TRASH_SHEET);
     
-    trashSheet.deleteRow(index + 2);
-    return returnSuccess("Permanently deleted");
+    if (index >= 0) {
+      trashSheet.deleteRow(index + 2);
+      return returnSuccess("Permanently deleted");
+    }
+    
+    return returnError("Invalid index");
   } catch (error) {
     return returnError("Failed to delete: " + error.toString());
   }
@@ -345,7 +350,7 @@ function editClient(data) {
 
 function returnSuccess(message, data = null) {
   return ContentService.createTextOutput(
-    JSON.stringify({ success: true, message: message, trash: data })
+    JSON.stringify({ success: true, message: message, data: data })
   ).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -355,33 +360,42 @@ function returnError(message) {
   ).setMimeType(ContentService.MimeType.JSON);
 }
 
-// LOG API CALL DATA TO SHEET
+// LOG API CALL DATA TO LOGS SHEET
 function logApiCallData(params) {
   try {
+    if (!params || params.apiCalls === undefined) {
+      Logger.log("Invalid params received: " + JSON.stringify(params));
+      return returnError("Missing apiCalls parameter");
+    }
+    
     const ss = SpreadsheetApp.openById(SHEET_ID);
-    let sheet = ss.getSheetByName(API_LOGS_SHEET);
+    if (!ss) {
+      return returnError("Could not open spreadsheet");
+    }
+    
+    let sheet = ss.getSheetByName(LOGS_SHEET);
     
     // Create sheet if it doesn't exist
     if (!sheet) {
-      sheet = ss.insertSheet(API_LOGS_SHEET);
-      sheet.appendRow(["Timestamp", "Date", "Time", "API Calls", "Session Start"]);
+      sheet = ss.insertSheet(LOGS_SHEET);
+      sheet.appendRow(["Date", "Time", "Number of calls"]);
     }
     
     const now = new Date();
-    const timestamp = now.toLocaleString('en-US', { timeZone: 'America/Chicago' });
-    const date = Utilities.formatDate(now, 'America/Chicago', 'yyyy-MM-dd');
-    const time = Utilities.formatDate(now, 'America/Chicago', 'HH:mm:ss');
+    const date = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const time = Utilities.formatDate(now, Session.getScriptTimeZone(), 'HH:mm:ss');
+    const apiCalls = parseInt(params.apiCalls) || 0;
     
     sheet.appendRow([
-      timestamp,
       date,
       time,
-      params.apiCalls || 0,
-      params.sessionStart || ""
+      apiCalls
     ]);
     
+    Logger.log("API call logged to logs sheet: " + apiCalls);
     return returnSuccess("API call logged successfully");
   } catch (error) {
+    Logger.log("Error in logApiCallData: " + error.toString());
     return returnError("Failed to log API call: " + error.toString());
   }
 }
