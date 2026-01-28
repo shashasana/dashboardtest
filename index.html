@@ -44,6 +44,10 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
 .weather-layer-enhanced {
   filter: contrast(2.5) saturate(3.0) brightness(0.85) hue-rotate(5deg) !important;
 }
+/* Make clouds layer dark/black */
+.weather-layer-clouds {
+  filter: brightness(0.25) contrast(2) invert(0.15) !important;
+}
 /* API counter at bottom of map */
 .leaflet-bottom.leaflet-left {
   margin-bottom: 50px !important;
@@ -244,7 +248,7 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; }
   </div>
   <div id="map">
     <div id="mapApiCounter">
-      <strong>API Calls (Session):</strong> <span id="apiCallCount">0</span>
+      <!-- <strong>API Calls (Session):</strong> <span id="apiCallCount">0</span> -->
     </div>
   </div>
 </div>
@@ -292,7 +296,7 @@ const weatherLayers = {
   clouds: L.tileLayer('/api/weather?type=tile&layer=clouds&z={z}&x={x}&y={y}', { 
     opacity: 1.0,
     zIndex: 1000,
-    className: 'weather-layer-enhanced'
+    className: 'weather-layer-enhanced weather-layer-clouds'
   }),
   radar: L.tileLayer('/api/weather?type=tile&layer=precipitation&z={z}&x={x}&y={y}', { 
     opacity: 1.0,
@@ -369,15 +373,15 @@ async function logToGoogleSheet(statsData) {
 }
 
 // Update counter every 5 seconds
-setInterval(updateApiCallCounter, 5000);
+// setInterval(updateApiCallCounter, 5000);
 // Log to sheet every 60 seconds
-setInterval(() => {
-  if (lastLoggedCount > 0) {
-    updateApiCallCounter();
-  }
-}, 60000);
+// setInterval(() => {
+//   if (lastLoggedCount > 0) {
+//     updateApiCallCounter();
+//   }
+// }, 60000);
 // Initial update
-updateApiCallCounter();
+// updateApiCallCounter();
 
 // TEST: Add a simple colored overlay to verify layer rendering works
 const testOverlay = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { 

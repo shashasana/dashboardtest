@@ -32,7 +32,13 @@ async function logToGoogleSheet(sessionCount) {
     }
 
     // Calculate new total: previous total + current session count
-    const newTotal = currentTotal + sessionCount;
+    let newTotal = currentTotal + sessionCount;
+    
+    // Cap at 1000
+    if (newTotal > 1000) {
+      newTotal = 1000;
+      console.log('[GOOGLE-SHEET] Capped at 1000 API calls');
+    }
 
     // Send the new total to Google Sheet
     const response = await fetch(appsScriptUrl, {
