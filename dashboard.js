@@ -372,10 +372,38 @@ function loadMarkers(data) {
     Object.values(window.__serviceAreaLayers).forEach(lg => { try { lg.remove(); } catch(_){} });
     window.__serviceAreaLayers = {};
   }
+  
+  // Group clients by coordinates to detect duplicates
+  const coordMap = {};
+  data.forEach(item => {
+    const [name, inds, __, ___, coords] = item;
+    const key = `${coords[0]},${coords[1]}`;
+    if (!coordMap[key]) coordMap[key] = [];
+    coordMap[key].push(item);
+  });
+  
+  // Create markers with offset for clients at same location
   data.forEach(item=>{
     const [name, inds, __, ___, coords] = item;
     console.log(`[MARKERS] Setting up marker for: ${name}`);
-    const mk = L.circleMarker(coords,{
+    
+    // Get all clients at this location
+    const key = `${coords[0]},${coords[1]}`;
+    const clientsAtLocation = coordMap[key];
+    const indexAtLocation = clientsAtLocation.findIndex(c => c[0] === name);
+    const totalAtLocation = clientsAtLocation.length;
+    
+    // Calculate offset if multiple clients at same location
+    let offsetCoords = coords;
+    if (totalAtLocation > 1) {
+      const angle = (indexAtLocation / totalAtLocation) * (2 * Math.PI);
+      const radius = 0.003; // Approx 300m offset
+      const offsetLat = coords[0] + radius * Math.cos(angle);
+      const offsetLng = coords[1] + radius * Math.sin(angle);
+      offsetCoords = [offsetLat, offsetLng];
+    }
+    
+    const mk = L.circleMarker(offsetCoords,{
       radius:8, fillColor: colors[inds.split(",")[0].trim()]||"#666",
       color:"#000", weight:1, fillOpacity:0.9
     }).addTo(map);
@@ -903,10 +931,13 @@ document.getElementById("saveClientBtn").addEventListener("click", async () => {
 function populateDeleteDropdown() {
   const select = document.getElementById("clientToDelete");
   select.innerHTML = "<option value=''>Select client...</option>";
-  clients.forEach((c, idx) => {
+  // Create array with indices and sort by client name
+  const clientsWithIdx = clients.map((c, idx) => ({ name: c[0], idx: idx }));
+  clientsWithIdx.sort((a, b) => a.name.localeCompare(b.name));
+  clientsWithIdx.forEach(({ name, idx }) => {
     const opt = document.createElement("option");
     opt.value = idx;
-    opt.textContent = c[0];
+    opt.textContent = name;
     select.appendChild(opt);
   });
 }
