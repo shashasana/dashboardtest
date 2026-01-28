@@ -158,8 +158,8 @@ function doPost(e) {
     } else if (action === "permanentlyDelete") {
       return permanentlyDelete(payload.index);
     } else if (action === "logApiCall") {
-      // Handle both payload.data and direct payload properties
-      const dataToLog = payload.data || payload;
+      // Handle both payload.data format and direct properties
+      const dataToLog = payload.data || { apiCalls: payload.apiCalls, sessionStart: payload.sessionStart };
       Logger.log("logApiCall action detected, calling logApiCallData with: " + JSON.stringify(dataToLog));
       return logApiCallData(dataToLog);
     } else if (action === "getTotalApiCalls") {

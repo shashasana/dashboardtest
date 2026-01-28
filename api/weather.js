@@ -3,6 +3,60 @@
 let apiCallCount = 0;
 let sessionStart = new Date().toLocaleString();
 
+// Log to Google Sheet Apps Script
+async function logToGoogleSheet(sessionCount) {
+  try {
+    const appsScriptUrl = process.env.APPS_SCRIPT_URL;
+    if (!appsScriptUrl) {
+      console.log('[GOOGLE-SHEET] APPS_SCRIPT_URL not configured, skipping log');
+      return;
+    }
+
+    // First, fetch the current total from Google Sheet
+    let currentTotal = 0;
+    try {
+      const getTotalResponse = await fetch(appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'getTotalApiCalls' })
+      });
+
+      if (getTotalResponse.ok) {
+        const totalData = await getTotalResponse.json();
+        currentTotal = totalData.data?.total || 0;
+        console.log(`[GOOGLE-SHEET] Current total from sheet: ${currentTotal}`);
+      }
+    } catch (error) {
+      console.error('[GOOGLE-SHEET] Error fetching total:', error.message);
+      currentTotal = 0;
+    }
+
+    // Calculate new total: previous total + current session count
+    const newTotal = currentTotal + sessionCount;
+
+    // Send the new total to Google Sheet
+    const response = await fetch(appsScriptUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'logApiCall',
+        apiCalls: newTotal,
+        sessionStart: sessionStart
+      })
+    });
+
+    if (!response.ok) {
+      console.error(`[GOOGLE-SHEET] Failed to log: ${response.status}`);
+    } else {
+      console.log(`[GOOGLE-SHEET] Logged accumulated total: ${newTotal} (session: ${sessionCount})`);
+    }
+  } catch (error) {
+    console.error('[GOOGLE-SHEET] Error logging:', error.message);
+  }
+}
+
 module.exports = async (req, res) => {
   try {
     const apiKey = process.env.OPENWEATHER_API_KEY;
@@ -30,13 +84,19 @@ module.exports = async (req, res) => {
     
     // Handle tile requests
     if (type === 'tile') {
-      apiCallCount++; // Increment counter for each tile request
+      apiCallCount++; // Increment counter for this session
       
       if (!layer || !z || !x || !y) {
         return res.status(400).json({ error: 'Missing tile parameters: layer, z, x, y' });
       }
 
-      console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y}`);
+      // Get current total from Google Sheet and increment it
+      if (apiCallCount % 5 === 0) {
+        // Log to Google Sheet every 5 tiles to avoid rate limiting
+        logToGoogleSheet(apiCallCount);
+      }
+
+      console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y} (session count: ${apiCallCount})`);
       
       // Use the classic tile API with colored layer names
       const layerMap = {
