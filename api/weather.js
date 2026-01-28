@@ -104,7 +104,31 @@ module.exports = async (req, res) => {
 
       console.log(`[WEATHER-TILE] Fetching ${layer} tile: z=${z}, x=${x}, y=${y} (session count: ${apiCallCount})`);
       
-      // Use the classic tile API with colored layer names
+      // IMPORTANT: OpenWeatherMap tile layers require Professional subscription or higher
+      // Free tier does NOT support tile layers
+      // Alternative: Use rainviewer.com for free weather tiles
+      
+      // Try RainViewer free tiles first (no API key needed)
+      if (layer === 'precipitation' || layer === 'radar') {
+        // RainViewer provides free precipitation radar
+        const timestamp = Math.floor(Date.now() / 1000) - 600; // 10 minutes ago
+        const tileUrl = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/256/${z}/${x}/${y}/2/1_1.png`;
+        console.log(`[WEATHER-TILE] Using RainViewer (free): ${tileUrl}`);
+        
+        try {
+          const tileResponse = await fetch(tileUrl);
+          if (tileResponse.ok) {
+            const buffer = await tileResponse.arrayBuffer();
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Cache-Control', 'public, max-age=600');
+            return res.status(200).send(Buffer.from(buffer));
+          }
+        } catch (e) {
+          console.log('[WEATHER-TILE] RainViewer failed, trying OpenWeatherMap...');
+        }
+      }
+      
+      // Fallback to OpenWeatherMap (requires paid subscription for tiles)
       const layerMap = {
         'precipitation': 'precipitation_new',
         'clouds': 'clouds_new', 
@@ -117,9 +141,7 @@ module.exports = async (req, res) => {
       
       let tileUrl = `https://tile.openweathermap.org/map/${layerName}/${z}/${x}/${y}.png?appid=${apiKey}`;
       
-      console.log(`[WEATHER-TILE] Using classic API: ${layerName}. URL: ${tileUrl.substring(0, 150)}...`);
-      
-      console.log(`[WEATHER-TILE] Using layer: ${layerName}. URL: ${tileUrl}`);
+      console.log(`[WEATHER-TILE] Using OpenWeatherMap: ${layerName}. URL: ${tileUrl.substring(0, 150)}...`);
       
       try {
         const tileResponse = await fetch(tileUrl);
@@ -148,18 +170,13 @@ module.exports = async (req, res) => {
         return res.status(200).send(Buffer.from(buffer));
       } catch (tileError) {
         console.error("[WEATHER-TILE] Fetch error:", tileError.message);
-        // Return transparent PNG on error
-        const transparentPng = Buffer.from([
-          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-          0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-          0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
-          0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-          0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
-          0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
-        ]);
-        res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Cache-Control', 'public, max-age=86400');
-        return res.status(200).send(transparentPng);
+        // Return error JSON for debugging instead of hiding with transparent PNG
+        return res.status(500).json({ 
+          error: 'Tile fetch failed',
+          layer: layer,
+          details: tileError.message,
+          hint: 'Check if your OpenWeatherMap subscription includes tile layers, or use RainViewer for free precipitation data'
+        });
       }
     }
     
