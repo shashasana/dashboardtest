@@ -302,8 +302,8 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("Authenticated, showing dashboard");
   document.getElementById("accessDenied").style.display = "none";
 
-// MAP INIT - Tighter bounds to show only USA mainland
-const usaBounds = [[28.5, -125.0], [49.384358, -66.93457]]; // Raised southern boundary to exclude Mexico
+// MAP INIT - Bounds to show USA mainland including south Florida and Texas
+const usaBounds = [[24.0, -125.0], [49.384358, -66.93457]]; // Lowered southern boundary to include south FL/TX
 const map = L.map("map", {
   maxBounds: usaBounds,
   maxBoundsViscosity: 1.0,

@@ -9,6 +9,8 @@
  * D - Service Area
  * E - Latitude
  * F - Longitude
+ * G - Poster
+ * H - Slack User ID
  * 
  * SETUP INSTRUCTIONS:
  * 1. Set Script Properties:
@@ -55,6 +57,19 @@ function doPost(e) {
     return response;
   }
 
+  // Command option: /weather {Poster Name} (send weather for specific poster)
+  const posterResult = findPosterByName(text);
+  if (posterResult.posterName) {
+    const response = respond("✅ Fetching weather for " + posterResult.posterName + " clients...");
+    try {
+      sendWeatherByPoster(posterResult.posterName);
+    } catch (err) {
+      Logger.log("Poster weather error: " + err.toString());
+    }
+    return response;
+  }
+
+  // Try to find client by name (including NA poster clients)
   const result = findClientByName(text);
 
   // If no matches found
@@ -97,7 +112,7 @@ function doPost(e) {
 }
 
 /* =========================
-   DAILY WEATHER REPORT FOR ALL CLIENTS
+   DAILY WEATHER REPORT FOR ALL CLIENTS - GROUPED BY POSTER
    ========================= */
 function sendDailyWeatherReportForAllClients() {
   const clients = getAllClients();
@@ -108,33 +123,67 @@ function sendDailyWeatherReportForAllClients() {
     return;
   }
 
+  // Filter out clients with NA poster
+  const activeClients = clients.filter(c => {
+    const posterUpper = (c.poster || "").toUpperCase();
+    return posterUpper !== "NA" && posterUpper !== "";
+  });
+
+  Logger.log(`Active clients (excluding NA): ${activeClients.length}`);
+
+  // Group clients by poster
+  const clientsByPoster = {};
+  activeClients.forEach(client => {
+    const poster = client.poster || "Unassigned";
+    if (!clientsByPoster[poster]) {
+      clientsByPoster[poster] = {
+        slackUserId: client.slackUserId || null,
+        clients: []
+      };
+    }
+    clientsByPoster[poster].clients.push(client);
+  });
+
   let message = "🌤️ *Today's Weather Report for All Clients*\n\n";
 
-  clients.forEach(client => {
-    Logger.log(`Processing client: ${client.name} (${client.lat}, ${client.lng})`);
-    try {
-      const w = getWeather(client.lat, client.lng);
-      Logger.log(`Weather received for ${client.name}: ${JSON.stringify(w)}`);
-      const summary = summarizeWeather(w);
-
-      message += `*${client.name}*\n`;
-      message += `Temp: ${Math.round(w.min)}–${Math.round(w.max)}°C\n`;
-      message += `${summary}\n\n`;
-
-    } catch (err) {
-      Logger.log(`Weather error for ${client.name}: ${err.toString()}`);
-      message += `*${client.name}*\n⚠️ Weather unavailable\n\n`;
+  // Process each poster group
+  Object.keys(clientsByPoster).sort().forEach(posterName => {
+    const group = clientsByPoster[posterName];
+    
+    // Add poster mention
+    if (group.slackUserId) {
+      message += `<@${group.slackUserId}>\n`;
+    } else {
+      message += `*${posterName}*\n`;
     }
+
+    // Add weather for each client in this poster's group
+    group.clients.forEach(client => {
+      Logger.log(`Processing client: ${client.name} (${client.lat}, ${client.lng})`);
+      try {
+        const w = getWeather(client.lat, client.lng);
+        Logger.log(`Weather received for ${client.name}: ${JSON.stringify(w)}`);
+        const summary = summarizeWeather(w);
+
+        message += `*${client.name}*\n`;
+        message += `Temp: ${Math.round(w.min)}–${Math.round(w.max)}°C\n`;
+        message += `${summary}\n\n`;
+
+      } catch (err) {
+        Logger.log(`Weather error for ${client.name}: ${err.toString()}`);
+        message += `*${client.name}*\n⚠️ Weather unavailable\n\n`;
+      }
+    });
   });
 
   Logger.log(`Final message length: ${message.length}`);
   Logger.log(`Message content: ${message}`);
   
   // Only send if we have actual content beyond the header
-  if (clients.length > 0) {
+  if (activeClients.length > 0) {
     sendToSlackChannel(message);
   } else {
-    Logger.log("No clients to report on");
+    Logger.log("No active clients to report on");
   }
 }
 
@@ -167,10 +216,53 @@ function getAllClients() {
              !isNaN(parseFloat(r[5]));
     })
     .map(r => ({
-      name: String(r[0]).trim(), // Column A - ensure string
-      lat: parseFloat(r[4]),     // Column E
-      lng: parseFloat(r[5])      // Column F
+      name: String(r[0]).trim(),      // Column A - ensure string
+      lat: parseFloat(r[4]),          // Column E
+      lng: parseFloat(r[5]),          // Column F
+      poster: r[6] ? String(r[6]).trim() : "", // Column G - Poster
+      slackUserId: r[7] ? String(r[7]).trim() : "" // Column H - Slack User ID
     }));
+}
+
+/* =========================
+   FIND POSTER BY NAME (WITH FUZZY MATCHING)
+   Returns: { posterName: poster name or null }
+   ========================= */
+function findPosterByName(name) {
+  const clients = getAllClients();
+  
+  if (!name || typeof name !== 'string') {
+    return { posterName: null };
+  }
+  
+  const query = name.toLowerCase().trim();
+  
+  // Collect unique posters
+  const uniquePosters = [...new Set(clients.map(c => c.poster).filter(p => p))];
+  
+  // Exact match
+  for (const poster of uniquePosters) {
+    if (poster.toLowerCase() === query) {
+      return { posterName: poster };
+    }
+  }
+  
+  // Starts with match
+  for (const poster of uniquePosters) {
+    if (poster.toLowerCase().startsWith(query)) {
+      return { posterName: poster };
+    }
+  }
+  
+  // Contains match
+  for (const poster of uniquePosters) {
+    if (poster.toLowerCase().includes(query)) {
+      return { posterName: poster };
+    }
+  }
+  
+  // No matches
+  return { posterName: null };
 }
 
 /* =========================
@@ -469,6 +561,49 @@ function sendToSlackChannel(message) {
     Logger.log(`Error sending to Slack: ${error.toString()}`);
     throw error;
   }
+}
+
+/* =========================
+   SEND WEATHER FOR SPECIFIC POSTER
+   ========================= */
+function sendWeatherByPoster(posterName) {
+  const clients = getAllClients();
+  Logger.log(`Fetching weather for poster: ${posterName}`);
+  
+  // Filter clients by poster and exclude NA
+  const posterClients = clients.filter(c => {
+    const posterUpper = (c.poster || "").toUpperCase();
+    return c.poster === posterName && posterUpper !== "NA";
+  });
+  
+  if (!posterClients.length) {
+    Logger.log(`No clients found for poster: ${posterName}`);
+    return;
+  }
+
+  let message = `🌤️ *Weather Report for ${posterName}*\n\n`;
+
+  posterClients.forEach(client => {
+    Logger.log(`Processing client: ${client.name} (${client.lat}, ${client.lng})`);
+    try {
+      const w = getWeather(client.lat, client.lng);
+      Logger.log(`Weather received for ${client.name}: ${JSON.stringify(w)}`);
+      const summary = summarizeWeather(w);
+
+      message += `*${client.name}*\n`;
+      message += `Temp: ${Math.round(w.min)}–${Math.round(w.max)}°C\n`;
+      message += `${summary}\n\n`;
+
+    } catch (err) {
+      Logger.log(`Weather error for ${client.name}: ${err.toString()}`);
+      message += `*${client.name}*\n⚠️ Weather unavailable\n\n`;
+    }
+  });
+
+  Logger.log(`Final message length: ${message.length}`);
+  Logger.log(`Message content: ${message}`);
+  
+  sendToSlackChannel(message);
 }
 
 /* =========================
