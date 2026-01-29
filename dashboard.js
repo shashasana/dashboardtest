@@ -4,7 +4,7 @@ let map; // Global map variable
 document.addEventListener("DOMContentLoaded", () => {
 console.log('[DASHBOARD] DOMContentLoaded fired, initializing map...');
 // USA bounds: [south, west], [north, east]
-const usaBounds = [[24.396308, -125.0], [49.384358, -66.93457]];
+const usaBounds = [[24.0, -125.0], [49.384358, -66.93457]];
 map = L.map("map", {
   maxBounds: usaBounds,
   maxBoundsViscosity: 1.0,
