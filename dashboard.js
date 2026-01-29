@@ -889,6 +889,8 @@ document.getElementById("saveClientBtn").addEventListener("click", async () => {
   const industry = document.getElementById("newClientIndustry").value.trim();
   const location = document.getElementById("newClientLocation").value.trim();
   const serviceArea = document.getElementById("newClientServiceArea").value.trim();
+  const poster = document.getElementById("newClientPoster").value.trim();
+  const slackUserId = document.getElementById("newClientSlackUserId").value.trim();
   
   if(!name || !industry || !location) {
     alert("Fill in all required fields");
@@ -911,7 +913,7 @@ document.getElementById("saveClientBtn").addEventListener("click", async () => {
       method: "POST",
       body: JSON.stringify({
         action: "addClient",
-        data: { name, industry, location, serviceArea, lat: coords[0], lng: coords[1] }
+        data: { name, industry, location, serviceArea, poster, slackUserId, lat: coords[0], lng: coords[1] }
       })
     });
     
