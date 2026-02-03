@@ -89,6 +89,7 @@ function initWeatherLayers() {
 // STATE
 let clients = [];
 let filteredClients = []; // Track currently displayed clients
+let precomputedServiceAreas = {}; // **PERFORMANCE**: All service areas preloaded on startup
 
 // COLORS
 const colors = {
@@ -252,6 +253,27 @@ let clients = [];
 let legendStatus = {};
 let markers = [], chart=null, currentChartType="bar";
 
+// **PERFORMANCE**: Load all service areas at startup (CDN cached)
+async function loadPrecomputedServiceAreas() {
+  try {
+    console.log('[PERF] Loading precomputed service areas from CDN...');
+    const res = await fetch('/data/service-areas.json');
+    if (!res.ok) {
+      console.warn('[PERF] Service areas JSON not found, falling back to runtime fetch');
+      return;
+    }
+    const data = await res.json();
+    if (data.clients) {
+      data.clients.forEach(client => {
+        precomputedServiceAreas[client.name] = client.polygons || [];
+      });
+      console.log(`[PERF] Loaded service areas for ${Object.keys(precomputedServiceAreas).length} clients`);
+    }
+  } catch (err) {
+    console.warn('[PERF] Error loading precomputed service areas:', err);
+  }
+}
+
 // INIT
 (async () => {
   const loadingDiv = document.getElementById("loadingStatus");
@@ -261,6 +283,9 @@ let markers = [], chart=null, currentChartType="bar";
   try {
     // Initialize weather layers first
     initWeatherLayers();
+    
+    // **PERFORMANCE**: Load all service area data at startup (CDN cached)
+    await loadPrecomputedServiceAreas();
     
     clients = await fetchClientsFromSheet();
     // Localhost-only demo: inject service areas for preview without sheet changes
@@ -649,12 +674,13 @@ async function setupServiceAreaOnClick(marker, client) {
       return;
     }
     if (!window.__serviceAreaLayers) window.__serviceAreaLayers = {};
+    
     marker.on('click', async () => {
       try {
         console.log(`[SA-CLICK] Marker clicked: ${name}`);
         const existing = window.__serviceAreaLayers[name];
         if (existing) {
-          // Robust removal of previously rendered group
+          // Toggle off: remove the layer group
           try { map.removeLayer(existing); } catch(_) {}
           try { existing.clearLayers(); } catch(_) {}
           delete window.__serviceAreaLayers[name];
@@ -662,14 +688,25 @@ async function setupServiceAreaOnClick(marker, client) {
         }
 
         const group = L.layerGroup().addTo(map);
-        const results = [];
-        for (const e of entries) {
-          const result = await fetchPolygonForEntry(e);
-          if (!result || !result.feature) continue;
-          results.push(result);
+        
+        // **PERFORMANCE**: Use precomputed polygons instead of fetching on click
+        // This is instant - zero network calls
+        const results = precomputedServiceAreas[name] || [];
+        
+        // If no precomputed data, fall back to fetching (but cache it)
+        let finalResults = results;
+        if (results.length === 0) {
+          console.log(`[SA-CLICK] No precomputed data for ${name}, fetching...`);
+          const fetchedResults = [];
+          for (const e of entries) {
+            const result = await fetchPolygonForEntry(e);
+            if (!result || !result.feature) continue;
+            fetchedResults.push(result);
+          }
+          finalResults = fetchedResults;
         }
 
-        if (results.length === 0) {
+        if (finalResults.length === 0) {
           // Fallback: render a small area around the client's location
           try {
             const lat = coords[0], lon = coords[1];
@@ -686,15 +723,28 @@ async function setupServiceAreaOnClick(marker, client) {
         }
 
         // Union all features for a clean solid polygon
-        let unionFeature = results[0].feature;
+        let unionFeature = finalResults[0].feature || finalResults[0];
         if (typeof turf !== 'undefined' && turf.union) {
-          for (let i=1;i<results.length;i++) {
+          for (let i=1;i<finalResults.length;i++) {
+            const featureToUnion = finalResults[i].feature || finalResults[i];
             try {
-              const u = turf.union(unionFeature, results[i].feature);
+              const u = turf.union(unionFeature, featureToUnion);
               if (u) unionFeature = u;
             } catch(_) {}
           }
         }
+        
+        // **PERFORMANCE**: Simplify polygon to reduce render time
+        if (typeof turf !== 'undefined' && turf.simplify) {
+          try {
+            unionFeature = turf.simplify(unionFeature, { 
+              tolerance: 0.0005,  // ~50 meters
+              highQuality: true 
+            });
+            console.log('[SA-SIMPLIFY] Polygon simplified for faster render');
+          } catch(_) {}
+        }
+        
         try {
           L.geoJSON(unionFeature, { style: SERVICE_AREA_STYLE, interactive:false, pane:'serviceAreaPane' }).addTo(group);
           console.log('[SA-RENDER] Union polygon added to map');
@@ -707,7 +757,9 @@ async function setupServiceAreaOnClick(marker, client) {
           iconAnchor: [12, 36],
           popupAnchor: [0, -36]
         });
-        for (const { feature, label } of results) {
+        for (const item of finalResults) {
+          const feature = item.feature || item;
+          const label = item.label || '';
           if (typeof turf !== 'undefined' && turf.center) {
             const center = turf.center(feature);
             const [lng, lat] = center.geometry.coordinates;
@@ -716,16 +768,20 @@ async function setupServiceAreaOnClick(marker, client) {
         }
         
         // Invisible interactive layers per entry for hover tooltips
-        for (const { feature, label } of results) {
+        for (const item of finalResults) {
+          const feature = item.feature || item;
+          const label = item.label || '';
           const invisible = L.geoJSON(feature, { style: { opacity:0, fillOpacity:0 }, interactive:true, pane:'serviceAreaPane' });
           invisible.addTo(group).bindTooltip(label, { permanent:false, direction:'center' });
         }
         // Dashed overlaps between entries only where they intersect
         if (typeof turf !== 'undefined' && turf.intersect) {
-          for (let i=0;i<results.length;i++) {
-            for (let j=i+1;j<results.length;j++) {
+          for (let i=0;i<finalResults.length;i++) {
+            for (let j=i+1;j<finalResults.length;j++) {
               try {
-                const overlap = turf.intersect(results[i].feature, results[j].feature);
+                const f1 = finalResults[i].feature || finalResults[i];
+                const f2 = finalResults[j].feature || finalResults[j];
+                const overlap = turf.intersect(f1, f2);
                 if (overlap) {
                   L.geoJSON(overlap, { style: OVERLAP_STYLE }).addTo(group);
                 }
@@ -736,7 +792,9 @@ async function setupServiceAreaOnClick(marker, client) {
 
         // Add dashed boundary lines for each ZIP
         try {
-          for (const { feature, label } of results) {
+          for (const item of finalResults) {
+            const feature = item.feature || item;
+            const label = item.label || '';
             // Render dashed outline for each ZIP boundary in dedicated pane
             L.geoJSON(feature, { 
               style: { color:'#333', weight:2, dashArray:'5 5', fillOpacity:0, interactive:true },

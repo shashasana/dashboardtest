@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-02-04",
+  "clients": [
+    {
+      "name": "Client A",
+      "industry": "Roofing",
+      "location": "Seattle, WA",
+      "lat": 47.6062,
+      "lng": -122.3321,
+      "serviceArea": "98101, 98102, 98103",
+      "polygons": [
+        {
+          "entry": "98101",
+          "label": "Seattle WA 98101",
+          "feature": {
+            "type": "Feature",
+            "geometry": {
+              "type": "Polygon",
+              "coordinates": [[[-122.34, 47.60], [-122.33, 47.60], [-122.33, 47.61], [-122.34, 47.61], [-122.34, 47.60]]]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "note": "This file is generated from Google Sheets. To regenerate, run the export script.",
+    "updateInstructions": "Use the generateServiceAreasJSON() function in Apps Script or export-data.js"
+  }
+}

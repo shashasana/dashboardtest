@@ -77,6 +77,10 @@ const server = http.createServer(async (req, res) => {
     if (requestUrl.pathname === '/api/weather') {
       return handleWeather(requestUrl, res);
     }
+    // Add Cache-Control for service-areas.json to allow CDN caching
+    if (requestUrl.pathname === '/data/service-areas.json') {
+      return handleStatic(requestUrl, res);
+    }
     return handleStatic(requestUrl, res);
   } catch (err) {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
