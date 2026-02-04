@@ -6,7 +6,7 @@
   "scripts": {
     "start": "vercel dev",
     "dev": "node server.js",
-    "build": "node quick-export.js",
+    
     "export": "node quick-export.js"
   },
   "author": "Your Name",
