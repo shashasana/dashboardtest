@@ -1206,69 +1206,7 @@ document.getElementById("deleteClientBtn").addEventListener("click", () => {
   if(form.style.display === "block") populateDeleteDropdown();
 });
 
-// REFRESH SERVICE AREAS BUTTON (localhost only - Vercel doesn't support process spawning)
-const isProduction = location.hostname !== 'localhost' && location.hostname !== '127.0.0.1';
 
-if (isProduction) {
-  // Hide refresh button on production (batch-fetch handles it automatically)
-  const refreshBtn = document.getElementById("refreshServiceAreasBtn");
-  if (refreshBtn) {
-    refreshBtn.style.display = "none";
-  }
-  const refreshStatus = document.getElementById("refreshStatus");
-  if (refreshStatus) {
-    refreshStatus.innerHTML = "💡 Service areas auto-loaded via batch fetch on page load";
-    refreshStatus.style.display = "block";
-    refreshStatus.style.background = "#e3f2fd";
-    refreshStatus.style.color = "#1565c0";
-  }
-} else {
-  // Show refresh button on localhost
-  document.getElementById("refreshServiceAreasBtn").addEventListener("click", async () => {
-    const btn = document.getElementById("refreshServiceAreasBtn");
-    const statusDiv = document.getElementById("refreshStatus");
-    
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.style.opacity = "0.6";
-    btn.textContent = "⏳ Refreshing...";
-    
-    statusDiv.style.display = "block";
-    statusDiv.innerHTML = "🔄 Fetching service areas from Google Sheet...";
-    statusDiv.style.background = "#e8f4f8";
-    statusDiv.style.color = "#2c3e50";
-    
-    try {
-      const response = await fetch("/api/refresh-service-areas");
-      const data = await response.json();
-      
-      if (data.success) {
-        statusDiv.style.background = "#d4edda";
-        statusDiv.style.color = "#155724";
-        statusDiv.innerHTML = "✅ Service areas refreshed! Reloading page...";
-        
-        // Reload precomputed data
-        await new Promise(r => setTimeout(r, 1500));
-        window.location.reload();
-      } else {
-        statusDiv.style.background = "#f8d7da";
-        statusDiv.style.color = "#721c24";
-        statusDiv.innerHTML = "❌ Refresh failed: " + (data.error || "Unknown error");
-        
-        btn.disabled = false;
-        btn.style.opacity = "1";
-        btn.textContent = originalText;
-      }
-    } catch (err) {
-      statusDiv.style.background = "#f8d7da";
-      statusDiv.style.color = "#721c24";
-      statusDiv.innerHTML = "❌ Error: " + err.message;
-      
-      btn.disabled = false;
-    btn.style.opacity = "1";
-    btn.textContent = originalText;
-  }
-});
 
 document.querySelectorAll(".closeForm").forEach(btn => {
   btn.addEventListener("click", (e) => {
