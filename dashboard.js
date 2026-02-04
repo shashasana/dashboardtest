@@ -257,7 +257,7 @@ let markers = [], chart=null, currentChartType="bar";
 async function loadPrecomputedServiceAreas() {
   try {
     console.log('[PERF] Loading precomputed service areas from CDN...');
-    const res = await fetch('/data/service-areas.json');
+    const res = await fetch('/service-areas.json');
     console.log('[PERF] Fetch response:', res.status, res.statusText);
     if (!res.ok) {
       console.warn('[PERF] Service areas JSON not found (status ' + res.status + '), falling back to runtime fetch');

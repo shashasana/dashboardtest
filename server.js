@@ -117,7 +117,7 @@ const server = http.createServer(async (req, res) => {
     }
     
     // Add Cache-Control for service-areas.json to allow CDN caching
-    if (requestUrl.pathname === '/data/service-areas.json') {
+    if (requestUrl.pathname === '/service-areas.json') {
       return handleStatic(requestUrl, res);
     }
     
