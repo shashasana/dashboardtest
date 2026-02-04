@@ -258,16 +258,22 @@ async function loadPrecomputedServiceAreas() {
   try {
     console.log('[PERF] Loading precomputed service areas from CDN...');
     const res = await fetch('/data/service-areas.json');
+    console.log('[PERF] Fetch response:', res.status, res.statusText);
     if (!res.ok) {
-      console.warn('[PERF] Service areas JSON not found, falling back to runtime fetch');
+      console.warn('[PERF] Service areas JSON not found (status ' + res.status + '), falling back to runtime fetch');
       return;
     }
     const data = await res.json();
+    console.log('[PERF] JSON loaded, clients:', data.clients ? data.clients.length : 0);
     if (data.clients) {
       data.clients.forEach(client => {
-        precomputedServiceAreas[client.name] = client.polygons || [];
+        if (client.polygons && client.polygons.length > 0) {
+          precomputedServiceAreas[client.name] = client.polygons;
+          console.log('[PERF] Preloaded:', client.name, '(' + client.polygons.length + ' polygons)');
+        }
       });
-      console.log(`[PERF] Loaded service areas for ${Object.keys(precomputedServiceAreas).length} clients`);
+      console.log(`[PERF] ✅ Loaded service areas for ${Object.keys(precomputedServiceAreas).length} clients`);
+      console.log('[PERF] Precomputed keys:', Object.keys(precomputedServiceAreas));
     }
   } catch (err) {
     console.warn('[PERF] Error loading precomputed service areas:', err);
@@ -692,11 +698,14 @@ async function setupServiceAreaOnClick(marker, client) {
         // **PERFORMANCE**: Use precomputed polygons instead of fetching on click
         // This is instant - zero network calls
         const results = precomputedServiceAreas[name] || [];
+        console.log('[SA-CLICK] Looking for precomputed data:', name);
+        console.log('[SA-CLICK] Available keys:', Object.keys(precomputedServiceAreas));
+        console.log('[SA-CLICK] Found polygons:', results.length);
         
         // If no precomputed data, fall back to fetching (but cache it)
         let finalResults = results;
         if (results.length === 0) {
-          console.log(`[SA-CLICK] No precomputed data for ${name}, fetching...`);
+          console.log(`[SA-CLICK] ❌ No precomputed data for ${name}, FETCHING...`);
           const fetchedResults = [];
           for (const e of entries) {
             const result = await fetchPolygonForEntry(e);
