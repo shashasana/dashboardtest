@@ -280,50 +280,6 @@ async function loadPrecomputedServiceAreas() {
   }
 }
 
-// **PERFORMANCE**: Batch fetch all service areas in parallel after markers load
-async function batchFetchAllServiceAreas(clientsList) {
-  console.log('[BATCH-FETCH] Starting parallel fetch for all ' + clientsList.length + ' clients...');
-  
-  const promises = clientsList.map(async (client) => {
-    const [name, industry, location, serviceArea, coords] = client;
-    if (!serviceArea || !serviceArea.trim()) return; // Skip clients with no service area
-    
-    const entries = serviceArea.split(',').map(e => e.trim()).filter(e => e);
-    if (entries.length === 0) return;
-    
-    try {
-      const polygons = [];
-      // Fetch all ZIP codes for this client in parallel
-      const results = await Promise.all(
-        entries.map(entry => fetchPolygonForEntry(entry).catch(() => null))
-      );
-      
-      results.forEach(result => {
-        if (result && result.feature) {
-          polygons.push(result);
-        }
-      });
-      
-      if (polygons.length > 0) {
-        precomputedServiceAreas[name] = polygons;
-        console.log('[BATCH-FETCH] ✅ Cached:', name, '(' + polygons.length + ' polygons)');
-      }
-    } catch (err) {
-      console.warn('[BATCH-FETCH] Error for', name, ':', err);
-    }
-  });
-  
-  // Wait for all clients to fetch (with timeout to avoid hanging)
-  await Promise.race([
-    Promise.all(promises),
-    new Promise((_, reject) => setTimeout(() => reject('Batch fetch timeout'), 60000))
-  ]).catch(() => {
-    console.log('[BATCH-FETCH] Timeout or error, but continuing...');
-  });
-  
-  console.log('[BATCH-FETCH] ✅ Complete. Cached:', Object.keys(precomputedServiceAreas).length, 'clients');
-}
-
 // INIT
 (async () => {
   const loadingDiv = document.getElementById("loadingStatus");
@@ -357,12 +313,6 @@ async function batchFetchAllServiceAreas(clientsList) {
     setupFilters();
     buildLegend();
     loadMarkers(clients);
-    
-    // **PERFORMANCE**: Batch fetch all service areas in parallel after markers load
-    console.log('[INIT] Starting batch fetch of all service areas in background...');
-    batchFetchAllServiceAreas(clients).then(() => {
-      console.log('[INIT] ✅ All service areas cached and ready for instant clicks');
-    });
     
     loadingDiv.innerHTML = `✅ Loaded ${clients.length} clients`;
     setTimeout(() => loadingDiv.style.display = "none", 3000);
