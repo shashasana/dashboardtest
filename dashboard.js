@@ -1146,6 +1146,53 @@ document.getElementById("deleteClientBtn").addEventListener("click", () => {
   if(form.style.display === "block") populateDeleteDropdown();
 });
 
+// REFRESH SERVICE AREAS BUTTON
+document.getElementById("refreshServiceAreasBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("refreshServiceAreasBtn");
+  const statusDiv = document.getElementById("refreshStatus");
+  
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.style.opacity = "0.6";
+  btn.textContent = "⏳ Refreshing...";
+  
+  statusDiv.style.display = "block";
+  statusDiv.innerHTML = "🔄 Fetching service areas from Google Sheet...";
+  statusDiv.style.background = "#e8f4f8";
+  statusDiv.style.color = "#2c3e50";
+  
+  try {
+    const response = await fetch("/api/refresh-service-areas");
+    const data = await response.json();
+    
+    if (data.success) {
+      statusDiv.style.background = "#d4edda";
+      statusDiv.style.color = "#155724";
+      statusDiv.innerHTML = "✅ Service areas refreshed! Reloading page...";
+      
+      // Reload precomputed data
+      await new Promise(r => setTimeout(r, 1500));
+      window.location.reload();
+    } else {
+      statusDiv.style.background = "#f8d7da";
+      statusDiv.style.color = "#721c24";
+      statusDiv.innerHTML = "❌ Refresh failed: " + (data.error || "Unknown error");
+      
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.textContent = originalText;
+    }
+  } catch (err) {
+    statusDiv.style.background = "#f8d7da";
+    statusDiv.style.color = "#721c24";
+    statusDiv.innerHTML = "❌ Error: " + err.message;
+    
+    btn.disabled = false;
+    btn.style.opacity = "1";
+    btn.textContent = originalText;
+  }
+});
+
 document.querySelectorAll(".closeForm").forEach(btn => {
   btn.addEventListener("click", (e) => {
     const formId = e.target.dataset.form;

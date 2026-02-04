@@ -1,6 +1,7 @@
 const http = require('http');
 const path = require('path');
 const fs = require('fs/promises');
+const { spawn } = require('child_process');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
@@ -48,6 +49,38 @@ async function handleWeather(requestUrl, res) {
   }
 }
 
+async function handleRefreshServiceAreas(res) {
+  try {
+    return new Promise((resolve) => {
+      const process_child = spawn('node', ['quick-export.js'], { cwd: ROOT });
+      let stdout = '';
+      let stderr = '';
+
+      process_child.stdout.on('data', (data) => { stdout += data.toString(); });
+      process_child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      process_child.on('close', (code) => {
+        if (code === 0) {
+          sendJson(res, 200, { 
+            success: true, 
+            message: 'Service areas refreshed successfully',
+            details: stdout
+          });
+        } else {
+          sendJson(res, 500, { 
+            success: false, 
+            error: 'Export script failed',
+            details: stderr || stdout
+          });
+        }
+        resolve();
+      });
+    });
+  } catch (err) {
+    return sendJson(res, 500, { error: 'Failed to trigger refresh', details: err.message });
+  }
+}
+
 async function handleStatic(requestUrl, res) {
   const decodedPath = decodeURIComponent(requestUrl.pathname || '/');
   const safePath = path.normalize(decodedPath).replace(/^([.][.][/\\])+/, '');
@@ -74,13 +107,20 @@ async function handleStatic(requestUrl, res) {
 const server = http.createServer(async (req, res) => {
   try {
     const requestUrl = new URL(req.url, `http://${req.headers.host}`);
+    
+    if (requestUrl.pathname === '/api/refresh-service-areas') {
+      return await handleRefreshServiceAreas(res);
+    }
+    
     if (requestUrl.pathname === '/api/weather') {
       return handleWeather(requestUrl, res);
     }
+    
     // Add Cache-Control for service-areas.json to allow CDN caching
     if (requestUrl.pathname === '/data/service-areas.json') {
       return handleStatic(requestUrl, res);
     }
+    
     return handleStatic(requestUrl, res);
   } catch (err) {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
