@@ -40,6 +40,32 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
 #resetLegend { margin-bottom:10px; padding:5px; background:#e74c3c; color:white; border:none; border-radius:3px; cursor:pointer; }
 #resetLegend:hover { background:#c0392b; }
 #map { width:100%; height:100%; position: relative; }
+#mapSearchControl {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1001;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  width: 240px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+#mapSearchControl input,
+#mapSearchControl button {
+  width: 100%;
+  padding: 6px;
+  box-sizing: border-box;
+  font-size: 12px;
+}
+#mapSearchStatus {
+  font-size: 11px;
+  color: #555;
+  min-height: 14px;
+}
 /* Enhanced weather layer styling - DRAMATIC dark colors for visibility */
 .weather-layer-enhanced {
   filter: contrast(2.8) saturate(3.5) brightness(0.6) hue-rotate(10deg) !important;
@@ -612,7 +638,8 @@ async function fetchClientsFromSheet() {
   try {
     let csv = null;
     try {
-      const res = await fetch(CSV_URL);
+      const sep = CSV_URL.includes('?') ? '&' : '?';
+      const res = await fetch(`${CSV_URL}${sep}t=${Date.now()}`);
       if(res.ok) csv = await res.text();
     } catch(e) {}
     
@@ -628,16 +655,9 @@ async function fetchClientsFromSheet() {
         const name = cells[0].replace(/^"|"$/g, '').trim();
         const industry = (cells[1] || "Unknown").replace(/^"|"$/g, '').trim();
         const location = (cells[2] || "Unknown").replace(/^"|"$/g, '').trim();
-        const lat = cells[4] ? parseFloat(cells[4]) : null;
-        const lng = cells[5] ? parseFloat(cells[5]) : null;
-        
         const serviceArea = (cells[3] || "").replace(/^"|"$/g, '').trim();
         let coords = [39.5, -98.35];
-        if(lat && lng && !isNaN(lat) && !isNaN(lng)) {
-          coords = [lat, lng];
-        } else {
-          coords = await geocodeLocation(location);
-        }
+        coords = await geocodeLocation(location);
         parsed.push([name, industry, location, serviceArea, coords]);
       }
     }
@@ -653,6 +673,7 @@ let legendStatus = {};
 let markers = [], chart=null, currentChartType="bar";
 let precomputedServiceAreas = {};
 const PRECOMPUTED_CACHE_KEY = 'precomputedServiceAreasV2';
+const START_WITH_ALL_HIDDEN = true;
 
 function normalizeGeoJsonNumbers(node) {
   if (Array.isArray(node)) {
@@ -752,7 +773,7 @@ async function loadPrecomputedServiceAreas() {
   }
   setupFilters();
   buildLegend();
-  loadMarkers(clients);
+  applyFilters();
 })();
 
 // FETCH WEATHER
@@ -1241,12 +1262,64 @@ function applyFilters(){
     const txt=(c[0]+" "+c[1]+" "+c[2]).toLowerCase();
     if(s && !txt.includes(s)) return false; // Search filter
     const industries = c[1].split(",").map(i=>i.trim());
+    if (s.length > 0) return true; // Search overrides legend filters
     return !industries.some(ind=>legendStatus[ind]); // Exclude if any industry is hidden
   });
   loadMarkers(filtered);
 }
 
 function setupFilters(){}
+
+// MAP SEARCH (ZIP / city / area boundary)
+let mapSearchLayer = null;
+function clearMapSearchLayer() {
+  if (mapSearchLayer) {
+    try { map.removeLayer(mapSearchLayer); } catch(_) {}
+    mapSearchLayer = null;
+  }
+  const status = document.getElementById('mapSearchStatus');
+  if (status) status.textContent = '';
+}
+
+async function runMapSearch() {
+  const input = document.getElementById('mapSearchInput');
+  const status = document.getElementById('mapSearchStatus');
+  if (!input) return;
+  const raw = input.value.trim();
+  if (!raw) {
+    if (status) status.textContent = 'Enter a ZIP or place';
+    return;
+  }
+
+  if (status) status.textContent = 'Searching…';
+  clearMapSearchLayer();
+  const entries = normalizeServiceAreaInput(raw).slice(0, 10);
+  const features = [];
+  const labels = [];
+
+  for (const entry of entries) {
+    const result = await fetchPolygonForEntry(entry);
+    if (result?.feature) {
+      features.push(result.feature);
+      labels.push(result.label || entry);
+    }
+  }
+
+  if (features.length === 0) {
+    if (status) status.textContent = 'No boundary found';
+    return;
+  }
+
+  mapSearchLayer = L.featureGroup().addTo(map);
+  features.forEach((feature, idx) => {
+    L.geoJSON(feature, { style: SERVICE_AREA_STYLE, pane:'serviceAreaPane' })
+      .addTo(mapSearchLayer)
+      .bindTooltip(labels[idx], { permanent:false, direction:'center' });
+  });
+
+  try { map.fitBounds(mapSearchLayer.getBounds(), { padding: [40, 40] }); } catch(_) {}
+  if (status) status.textContent = `Showing ${features.length} boundary${features.length > 1 ? 'ies' : ''}`;
+}
 
 // GEOCODE & VALIDATE
 async function geocodeAndValidate(location) {
@@ -1741,6 +1814,17 @@ document.getElementById("toggleChartType").addEventListener("click",()=>{
   document.getElementById("toggleChartType").innerText=currentChartType==="bar"?"Switch to Pie Chart":"Switch to Bar Chart";
   updateChart(filteredClients);
 });
+
+const mapSearchBtn = document.getElementById('mapSearchBtn');
+if (mapSearchBtn) mapSearchBtn.addEventListener('click', runMapSearch);
+const mapSearchClear = document.getElementById('mapSearchClear');
+if (mapSearchClear) mapSearchClear.addEventListener('click', clearMapSearchLayer);
+const mapSearchInput = document.getElementById('mapSearchInput');
+if (mapSearchInput) {
+  mapSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runMapSearch();
+  });
+}
 
 });
 </script>

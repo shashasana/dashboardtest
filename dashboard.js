@@ -184,15 +184,8 @@ async function fetchClientsFromSheet() {
             const industry = (cells[1] || "Unknown").toString().trim();
             const location = (cells[2] || "Unknown").toString().trim();
             const serviceArea = (cells[3] || "").toString().trim();
-            const lat = cells[4] ? parseFloat(cells[4]) : null;
-            const lng = cells[5] ? parseFloat(cells[5]) : null;
-            
             let coords = [39.5, -98.35];
-            if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-              coords = [lat, lng];
-            } else {
-              coords = await geocodeLocation(location);
-            }
+            coords = await geocodeLocation(location);
             parsed.push([name, industry, location, serviceArea, coords]);
           }
         }
@@ -234,15 +227,8 @@ async function fetchFromCSV() {
         const industry = (cells[1] || "Unknown").replace(/^"|"$/g, '').trim();
         const location = (cells[2] || "Unknown").replace(/^"|"$/g, '').trim();
         const serviceArea = (cells[3] || "").replace(/^"|"$/g, '').trim();
-        const lat = cells[4] ? parseFloat(cells[4]) : null;
-        const lng = cells[5] ? parseFloat(cells[5]) : null;
-        
         let coords = [39.5, -98.35];
-        if(lat && lng && !isNaN(lat) && !isNaN(lng)) {
-          coords = [lat, lng];
-        } else {
-          coords = await geocodeLocation(location);
-        }
+        coords = await geocodeLocation(location);
         parsed.push([name, industry, location, serviceArea, coords]);
       }
     }
