@@ -274,7 +274,8 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
       <div id="trashStatus" style="margin-top:8px; padding:8px; background:#ecf0f1; border-radius:3px; display:none; font-size:12px;"></div>
     </div>
 
-    <input type="text" id="searchBox" placeholder="Search client / industry / location..." style="margin-bottom:15px;">
+    <input type="text" id="searchBox" placeholder="Search client / industry / location..." style="margin-bottom:6px;">
+    <div id="searchStatus" style="margin:0 0 12px 0; font-size:12px; color:#c0392b; display:none;"></div>
     
     <!-- Weather Layer Controls -->
     <div id="weatherLayerControls">
@@ -620,6 +621,12 @@ function normalizeIndustries(inds) {
   return (inds || '').split(',').map(i => i.trim()).filter(Boolean);
 }
 
+function hardReload() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('t', Date.now().toString());
+  window.location.href = url.toString();
+}
+
 function buildPieSvg(palette) {
   const size = 26;
   const r = 11;
@@ -779,8 +786,20 @@ let precomputedServiceAreas = {};
 const PRECOMPUTED_CACHE_KEY = 'precomputedServiceAreasV2';
 const START_WITH_ALL_HIDDEN = true;
 const GEO_CACHE_KEY = 'clientGeocodeCacheV1';
+const FOCUS_CLIENT_KEY = 'focusClientNameV1';
 let geocodeCache = null;
 let mapSearchIndex = {};
+let pendingFocusClientName = null;
+
+function setFocusClientName(name) {
+  try { localStorage.setItem(FOCUS_CLIENT_KEY, name || ''); } catch(_) {}
+}
+function getFocusClientName() {
+  try { return localStorage.getItem(FOCUS_CLIENT_KEY) || ''; } catch(_) { return ''; }
+}
+function clearFocusClientName() {
+  try { localStorage.removeItem(FOCUS_CLIENT_KEY); } catch(_) {}
+}
 
 function getGeocodeCache() {
   if (geocodeCache) return geocodeCache;
@@ -954,6 +973,12 @@ async function loadPrecomputedServiceAreas() {
   }
   setupFilters();
   buildLegend();
+  const focusName = getFocusClientName();
+  if (focusName) {
+    const searchBox = document.getElementById('searchBox');
+    if (searchBox) searchBox.value = focusName;
+    pendingFocusClientName = focusName;
+  }
   applyFilters();
 })();
 
@@ -1433,10 +1458,23 @@ function loadMarkers(data) {
     const industries = normalizeIndustries(inds);
     const mk = L.marker(coords, { icon: createIndustryIcon(industries) }).addTo(map);
     mk.industries = industries;
+    mk.clientName = name;
     setupPopup(mk, item);
     setupServiceAreaOnClick(mk, item);
     markers.push(mk);
   });
+  if (pendingFocusClientName) {
+    const targetName = pendingFocusClientName.toLowerCase();
+    const target = markers.find(m => (m.clientName || '').toLowerCase() === targetName);
+    if (target) {
+      try {
+        map.setView(target.getLatLng(), Math.max(map.getZoom(), 10));
+        target.openPopup();
+      } catch(_) {}
+      clearFocusClientName();
+      pendingFocusClientName = null;
+    }
+  }
   updateChart(data);
 }
 
@@ -1458,6 +1496,18 @@ function updateChart(data){
 }
 
 // FILTERS
+function setSearchStatus(message) {
+  const el = document.getElementById("searchStatus");
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.style.display = "block";
+  } else {
+    el.textContent = "";
+    el.style.display = "none";
+  }
+}
+
 function applyFilters(){
   const s=document.getElementById("searchBox").value.toLowerCase().trim();
   const filtered = clients.filter(c=>{
@@ -1467,6 +1517,11 @@ function applyFilters(){
     if (s.length > 0) return true; // Search overrides legend filters
     return !industries.some(ind=>legendStatus[ind]); // Exclude if any industry is hidden
   });
+  if (s.length > 0 && filtered.length === 0) {
+    setSearchStatus("No clients match your search.");
+  } else {
+    setSearchStatus("");
+  }
   loadMarkers(filtered);
 }
 
@@ -1630,7 +1685,7 @@ document.getElementById("saveClientBtn").addEventListener("click", async () => {
     const result = await response.json();
     if(result.success) {
       statusDiv.innerHTML = "✅ Added! Refreshing...";
-      setTimeout(() => location.reload(), 1500);
+      setTimeout(() => hardReload(), 1500);
     } else {
       statusDiv.innerHTML = "❌ " + result.error;
     }
@@ -1678,7 +1733,7 @@ document.getElementById("confirmDeleteBtn").addEventListener("click", async () =
     const result = await response.json();
     if(result.success) {
       statusDiv.innerHTML = "✅ Deleted!";
-      setTimeout(() => location.reload(), 1500);
+      setTimeout(() => hardReload(), 1500);
     } else {
       statusDiv.innerHTML = "❌ " + result.error;
     }
@@ -1742,7 +1797,7 @@ async function restoreClient(idx) {
       body: JSON.stringify({ action: "restoreClient", index: idx })
     });
     const result = await response.json();
-    if(result.success) setTimeout(() => location.reload(), 1500);
+    if(result.success) setTimeout(() => hardReload(), 1500);
   } catch(e) {}
 }
 
@@ -1753,7 +1808,7 @@ async function permanentlyDeleteClient(idx) {
       body: JSON.stringify({ action: "permanentlyDelete", index: idx })
     });
     const result = await response.json();
-    if(result.success) setTimeout(() => location.reload(), 1500);
+    if(result.success) setTimeout(() => hardReload(), 1500);
   } catch(e) {}
 }
 
@@ -2035,7 +2090,8 @@ document.getElementById("saveEditBtn").addEventListener("click", async () => {
     const result = await response.json();
     if(result.success) {
       statusDiv.innerHTML = `✅ Updated${geocodeNote}! Refreshing...`;
-      setTimeout(() => location.reload(), 1500);
+      setFocusClientName(newName);
+      setTimeout(() => hardReload(), 1500);
     } else {
       statusDiv.innerHTML = "❌ Error: " + result.error;
     }

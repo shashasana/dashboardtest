@@ -241,7 +241,76 @@ let clients = [];
 let legendStatus = {};
 let markers = [], chart=null, currentChartType="bar";
 const GEO_CACHE_KEY = 'clientGeocodeCacheV1';
+const FOCUS_CLIENT_KEY = 'focusClientNameV1';
 let geocodeCache = null;
+let pendingFocusClientName = null;
+
+function setFocusClientName(name) {
+  try { localStorage.setItem(FOCUS_CLIENT_KEY, name || ''); } catch(_) {}
+}
+function getFocusClientName() {
+  try { return localStorage.getItem(FOCUS_CLIENT_KEY) || ''; } catch(_) { return ''; }
+}
+function clearFocusClientName() {
+  try { localStorage.removeItem(FOCUS_CLIENT_KEY); } catch(_) {}
+}
+
+function normalizeIndustries(inds) {
+  return (inds || '').split(',').map(i => i.trim()).filter(Boolean);
+}
+
+function hardReload() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('t', Date.now().toString());
+  window.location.href = url.toString();
+}
+
+function buildPieSvg(palette) {
+  const size = 26;
+  const r = 11;
+  const c = size / 2;
+  const total = palette.length || 1;
+  const parts = [];
+
+  function polarToCartesian(cx, cy, radius, angle) {
+    const rad = (angle - 90) * Math.PI / 180;
+    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
+  }
+
+  function describeArc(cx, cy, radius, startAngle, endAngle) {
+    const start = polarToCartesian(cx, cy, radius, endAngle);
+    const end = polarToCartesian(cx, cy, radius, startAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
+    return `M ${cx} ${cy} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
+  }
+
+  if (total === 1) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${c}" cy="${c}" r="${r}" fill="${palette[0]}"/><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+  }
+
+  for (let i = 0; i < total; i++) {
+    const start = (i / total) * 360;
+    const end = ((i + 1) / total) * 360;
+    parts.push(`<path d="${describeArc(c, c, r, start, end)}" fill="${palette[i]}"/>`);
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${parts.join('')}<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+}
+
+function createIndustryIcon(industries) {
+  const unique = [];
+  (industries || []).forEach(ind => {
+    if (!unique.includes(ind)) unique.push(ind);
+  });
+  const palette = unique.length ? unique.map(ind => colors[ind] || "#666") : ["#666"];
+  const svg = buildPieSvg(palette);
+  return L.divIcon({
+    className: 'industry-marker',
+    html: svg,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
+  });
+}
 
 function getGeocodeCache() {
   if (geocodeCache) return geocodeCache;
@@ -261,7 +330,18 @@ function setGeocodeCache(cache) {
 async function resolveClientCoords(name, location, lat, lng) {
   const cache = getGeocodeCache();
   const cached = cache[name];
+  const hasSheetCoords = Number.isFinite(lat) && Number.isFinite(lng);
   if (cached && cached.location === location && Array.isArray(cached.coords)) {
+    if (hasSheetCoords) {
+      const [clat, clng] = cached.coords;
+      const differs = Math.abs(clat - lat) > 0.000001 || Math.abs(clng - lng) > 0.000001;
+      if (differs) {
+        const coords = [lat, lng];
+        cache[name] = { location, coords };
+        setGeocodeCache(cache);
+        return coords;
+      }
+    }
     return cached.coords;
   }
   if (cached && cached.location !== location) {
@@ -270,7 +350,7 @@ async function resolveClientCoords(name, location, lat, lng) {
     setGeocodeCache(cache);
     return coords;
   }
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+  if (hasSheetCoords) {
     const coords = [lat, lng];
     cache[name] = { location, coords };
     setGeocodeCache(cache);
@@ -368,7 +448,15 @@ async function loadPrecomputedServiceAreas() {
     }
     setupFilters();
     buildLegend();
-    loadMarkers(clients);
+    const focusName = getFocusClientName();
+    if (focusName) {
+      const searchBox = document.getElementById('searchBox');
+      if (searchBox) searchBox.value = focusName;
+      pendingFocusClientName = focusName;
+      applyFilters();
+    } else {
+      loadMarkers(clients);
+    }
     
     loadingDiv.innerHTML = `✅ Loaded ${clients.length} clients`;
     setTimeout(() => loadingDiv.style.display = "none", 3000);
@@ -491,16 +579,26 @@ function loadMarkers(data) {
       offsetCoords = [offsetLat, offsetLng];
     }
     
-    const mk = L.circleMarker(offsetCoords,{
-      radius:8, fillColor: colors[inds.split(",")[0].trim()]||"#666",
-      color:"#000", weight:1, fillOpacity:0.9
-    }).addTo(map);
-    mk.industries = inds.split(",").map(i=>i.trim());
-    if(mk.industries.some(i=>legendStatus[i])) map.removeLayer(mk);
+    const industries = normalizeIndustries(inds);
+    const mk = L.marker(offsetCoords, { icon: createIndustryIcon(industries) }).addTo(map);
+    mk.industries = industries;
+    mk.clientName = name;
     setupPopup(mk, item);
     setupServiceAreaOnClick(mk, item);
     markers.push(mk);
   });
+  if (pendingFocusClientName) {
+    const targetName = pendingFocusClientName.toLowerCase();
+    const target = markers.find(m => (m.clientName || '').toLowerCase() === targetName);
+    if (target) {
+      try {
+        map.setView(target.getLatLng(), Math.max(map.getZoom(), 10));
+        target.openPopup();
+      } catch(_) {}
+      clearFocusClientName();
+      pendingFocusClientName = null;
+    }
+  }
   updateChart(data);
 }
 
@@ -909,14 +1007,32 @@ function updateChart(data){
 }
 
 // FILTERS
+function setSearchStatus(message) {
+  const el = document.getElementById("searchStatus");
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.style.display = "block";
+  } else {
+    el.textContent = "";
+    el.style.display = "none";
+  }
+}
+
 function applyFilters(){
   const s=document.getElementById("searchBox").value.toLowerCase().trim();
   const filtered = clients.filter(c=>{
     const txt=(c[0]+" "+c[1]+" "+c[2]).toLowerCase();
     if(s && !txt.includes(s)) return false; // Search filter
     const industries = c[1].split(",").map(i=>i.trim());
+    if (s.length > 0) return true; // Search overrides legend filters
     return !industries.some(ind=>legendStatus[ind]); // Exclude if any industry is hidden
   });
+  if (s.length > 0 && filtered.length === 0) {
+    setSearchStatus("No clients match your search.");
+  } else {
+    setSearchStatus("");
+  }
   console.log("applyFilters: search term=", s, "filtered count=", filtered.length);
   loadMarkers(filtered);
 }
@@ -1043,7 +1159,7 @@ document.getElementById("saveClientBtn").addEventListener("click", async () => {
     const result = await response.json();
     if(result.success) {
       statusDiv.innerHTML = "✅ Added!";
-      setTimeout(() => location.reload(), 1500);
+      setTimeout(() => hardReload(), 1500);
     } else {
       statusDiv.innerHTML = "❌ " + result.error;
     }
@@ -1099,7 +1215,7 @@ document.getElementById("confirmDeleteBtn").addEventListener("click", async () =
     const result = await response.json();
     if(result.success) {
       statusDiv.innerHTML = "✅ Deleted!";
-      setTimeout(() => location.reload(), 1500);
+      setTimeout(() => hardReload(), 1500);
     } else {
       statusDiv.innerHTML = "❌ " + result.error;
     }
@@ -1176,7 +1292,7 @@ async function restoreClient(idx) {
     
     const result = await response.json();
     if(result.success) {
-      setTimeout(() => location.reload(), 500);
+      setTimeout(() => hardReload(), 500);
     }
   } catch(e) {
     alert("Error: " + e.message);
@@ -1192,7 +1308,7 @@ async function permanentlyDeleteClient(idx) {
     
     const result = await response.json();
     if(result.success) {
-      setTimeout(() => location.reload(), 500);
+      setTimeout(() => hardReload(), 500);
     }
   } catch(e) {
     alert("Error: " + e.message);
