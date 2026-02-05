@@ -24,6 +24,30 @@ const SHEET_NAME = "Database";
 
 // Helper: Fetch from Nominatim with caching
 const nominatimCache = {};
+
+function ensureFeature(geo) {
+  if (!geo) return null;
+  if (geo.type === 'Feature') return geo;
+  if (geo.type === 'Polygon' || geo.type === 'MultiPolygon') {
+    return { type: 'Feature', geometry: geo, properties: {} };
+  }
+  return null;
+}
+
+async function fetchCensusZipPolygon(entry) {
+  if (!/^\d{5}$/.test(entry)) return null;
+  try {
+    const censusUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/2/query?where=ZCTA5='${entry}'&outFields=*&outSR=4326&f=geojson`;
+    const res = await fetch(censusUrl);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const feature = data?.features?.find(f => f?.geometry?.type === 'Polygon' || f?.geometry?.type === 'MultiPolygon');
+    if (!feature) return null;
+    return { label: entry, feature: ensureFeature(feature) || feature };
+  } catch (_) {
+    return null;
+  }
+}
 async function fetchNominatimPolygon(entry, retries = 3) {
   if (nominatimCache[entry]) {
     console.log(`  [CACHE] Using cached polygon for: ${entry}`);
@@ -75,11 +99,16 @@ async function fetchNominatimPolygon(entry, retries = 3) {
       
       // Fetch polygon using lookup API
       if (!item.osm_type || !item.osm_id) {
-        console.warn(`    [WARN] No OSM data, using fallback geometry`);
-        nominatimCache[entry] = {
-          label,
-          feature: createSquareFeature(item.lon, item.lat, 5)
-        };
+        console.warn(`    [WARN] No OSM data, trying Census fallback`);
+        if (isZip) {
+          const census = await fetchCensusZipPolygon(entry);
+          if (census?.feature) {
+            nominatimCache[entry] = { label, feature: census.feature };
+            return nominatimCache[entry];
+          }
+        }
+        const square = createSquareFeature(item.lon, item.lat, 5);
+        nominatimCache[entry] = square ? { label, feature: square } : null;
         return nominatimCache[entry];
       }
       
@@ -93,27 +122,37 @@ async function fetchNominatimPolygon(entry, retries = 3) {
       });
       
       if (!lookupRes.ok) {
-        console.warn(`    [WARN] Lookup HTTP ${lookupRes.status}, using fallback`);
-        nominatimCache[entry] = {
-          label,
-          feature: createSquareFeature(item.lon, item.lat, 5)
-        };
+        console.warn(`    [WARN] Lookup HTTP ${lookupRes.status}, trying Census fallback`);
+        if (isZip) {
+          const census = await fetchCensusZipPolygon(entry);
+          if (census?.feature) {
+            nominatimCache[entry] = { label, feature: census.feature };
+            return nominatimCache[entry];
+          }
+        }
+        const square = createSquareFeature(item.lon, item.lat, 5);
+        nominatimCache[entry] = square ? { label, feature: square } : null;
         return nominatimCache[entry];
       }
       
       const lookupData = await lookupRes.json();
       
       if (lookupData[0] && lookupData[0].geojson) {
-        const feature = lookupData[0].geojson;
+        const feature = ensureFeature(lookupData[0].geojson) || lookupData[0].geojson;
         console.log(`  [SUCCESS] Got polygon for: ${entry}`);
         nominatimCache[entry] = { label, feature };
         return nominatimCache[entry];
       } else {
-        console.warn(`    [WARN] No polygon in lookup, using fallback`);
-        nominatimCache[entry] = {
-          label,
-          feature: createSquareFeature(item.lon, item.lat, 5)
-        };
+        console.warn(`    [WARN] No polygon in lookup, trying Census fallback`);
+        if (isZip) {
+          const census = await fetchCensusZipPolygon(entry);
+          if (census?.feature) {
+            nominatimCache[entry] = { label, feature: census.feature };
+            return nominatimCache[entry];
+          }
+        }
+        const square = createSquareFeature(item.lon, item.lat, 5);
+        nominatimCache[entry] = square ? { label, feature: square } : null;
         return nominatimCache[entry];
       }
     } catch (err) {
@@ -131,14 +170,19 @@ async function fetchNominatimPolygon(entry, retries = 3) {
 
 // Helper: Create square fallback geometry
 function createSquareFeature(lon, lat, kmRadius = 5) {
+  const lonNum = parseFloat(lon);
+  const latNum = parseFloat(lat);
+  if (!Number.isFinite(lonNum) || !Number.isFinite(latNum)) {
+    return null;
+  }
   const dLat = kmRadius / 111;
-  const dLon = kmRadius / (111 * Math.cos(lat * Math.PI / 180) || 1);
+  const dLon = kmRadius / (111 * Math.cos(latNum * Math.PI / 180) || 1);
   const coords = [
-    [lon - dLon, lat - dLat],
-    [lon + dLon, lat - dLat],
-    [lon + dLon, lat + dLat],
-    [lon - dLon, lat + dLat],
-    [lon - dLon, lat - dLat]
+    [lonNum - dLon, latNum - dLat],
+    [lonNum + dLon, latNum - dLat],
+    [lonNum + dLon, latNum + dLat],
+    [lonNum - dLon, latNum + dLat],
+    [lonNum - dLon, latNum - dLat]
   ];
   return {
     type: 'Feature',

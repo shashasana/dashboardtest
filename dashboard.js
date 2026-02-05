@@ -280,7 +280,7 @@ function normalizeFeatureNumbers(feature) {
 async function loadPrecomputedServiceAreas() {
   try {
     console.log('[PERF] Loading precomputed service areas from CDN...');
-    const res = await fetch('/service-areas.json');
+    const res = await fetch(`/service-areas.json?ts=${Date.now()}`);
     console.log('[PERF] Fetch response:', res.status, res.statusText);
     if (!res.ok) {
       console.warn('[PERF] Service areas JSON not found (status ' + res.status + '), falling back to runtime fetch');

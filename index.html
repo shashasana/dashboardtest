@@ -652,6 +652,7 @@ let filteredClients = [];
 let legendStatus = {};
 let markers = [], chart=null, currentChartType="bar";
 let precomputedServiceAreas = {};
+const PRECOMPUTED_CACHE_KEY = 'precomputedServiceAreasV2';
 
 function normalizeGeoJsonNumbers(node) {
   if (Array.isArray(node)) {
@@ -677,10 +678,10 @@ function normalizeFeatureNumbers(feature) {
 }
 
 function getPrecomputedServiceAreasCache() {
-  try { return JSON.parse(localStorage.getItem('precomputedServiceAreas') || '{}'); } catch(_) { return {}; }
+  try { return JSON.parse(localStorage.getItem(PRECOMPUTED_CACHE_KEY) || '{}'); } catch(_) { return {}; }
 }
 function setPrecomputedServiceAreasCache(cache) {
-  try { localStorage.setItem('precomputedServiceAreas', JSON.stringify(cache)); } catch(_) {}
+  try { localStorage.setItem(PRECOMPUTED_CACHE_KEY, JSON.stringify(cache)); } catch(_) {}
 }
 
 async function loadPrecomputedServiceAreas() {
@@ -698,7 +699,7 @@ async function loadPrecomputedServiceAreas() {
       return;
     }
     console.log('[PERF] Loading precomputed service areas from /service-areas.json...');
-    const res = await fetch('/service-areas.json');
+    const res = await fetch(`/service-areas.json?ts=${Date.now()}`);
     if (!res.ok) {
       console.warn(`[PERF] Service areas JSON not found (status ${res.status})`);
       return;

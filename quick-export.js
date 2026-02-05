@@ -17,20 +17,49 @@ console.log('[CSV] URL:', CSV_URL);
 
 // Helper: Create square fallback geometry when polygon not found
 function createSquareFeature(lon, lat, kmRadius = 5) {
+  const lonNum = parseFloat(lon);
+  const latNum = parseFloat(lat);
+  if (!Number.isFinite(lonNum) || !Number.isFinite(latNum)) {
+    return null;
+  }
   const dLat = kmRadius / 111;
-  const dLon = kmRadius / (111 * Math.cos(lat * Math.PI / 180) || 1);
+  const dLon = kmRadius / (111 * Math.cos(latNum * Math.PI / 180) || 1);
   const coords = [
-    [lon - dLon, lat - dLat],
-    [lon + dLon, lat - dLat],
-    [lon + dLon, lat + dLat],
-    [lon - dLon, lat + dLat],
-    [lon - dLon, lat - dLat]
+    [lonNum - dLon, latNum - dLat],
+    [lonNum + dLon, latNum - dLat],
+    [lonNum + dLon, latNum + dLat],
+    [lonNum - dLon, latNum + dLat],
+    [lonNum - dLon, latNum - dLat]
   ];
   return {
     type: 'Feature',
     geometry: { type: 'Polygon', coordinates: [coords] },
     properties: {}
   };
+}
+
+function ensureFeature(geo) {
+  if (!geo) return null;
+  if (geo.type === 'Feature') return geo;
+  if (geo.type === 'Polygon' || geo.type === 'MultiPolygon') {
+    return { type: 'Feature', geometry: geo, properties: {} };
+  }
+  return null;
+}
+
+async function fetchCensusZipPolygon(entry) {
+  if (!/^\d{5}$/.test(entry)) return null;
+  try {
+    const censusUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/2/query?where=ZCTA5='${entry}'&outFields=*&outSR=4326&f=geojson`;
+    const res = await fetch(censusUrl);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const feature = data?.features?.find(f => f?.geometry?.type === 'Polygon' || f?.geometry?.type === 'MultiPolygon');
+    if (!feature) return null;
+    return { label: entry, feature: ensureFeature(feature) || feature };
+  } catch (_) {
+    return null;
+  }
 }
 
 // Helper: Fetch polygon from Nominatim
@@ -87,14 +116,28 @@ async function fetchNominatimPolygon(entry) {
         const lookupData = await lookupRes.json();
         if (lookupData[0] && lookupData[0].geojson) {
           console.log(`      ✓ Got polygon: ${label}`);
-          return { label, feature: lookupData[0].geojson };
+          const feature = ensureFeature(lookupData[0].geojson) || lookupData[0].geojson;
+          return { label, feature };
         }
       }
     }
     
-    // Fallback: Create simple square around the point
-    console.log(`      ✓ Fallback geometry: ${label}`);
-    return { label, feature: createSquareFeature(item.lon, item.lat, 5) };
+    // Fallback: Try Census ZIP polygon (real boundary)
+    if (isZip) {
+      const census = await fetchCensusZipPolygon(entry);
+      if (census?.feature) {
+        console.log(`      ✓ Census polygon: ${label}`);
+        return { label, feature: census.feature };
+      }
+    }
+
+    // Final fallback: Create simple square around the point
+    const square = createSquareFeature(item.lon, item.lat, 5);
+    if (square) {
+      console.log(`      ✓ Fallback geometry: ${label}`);
+      return { label, feature: square };
+    }
+    return null;
     
   } catch (err) {
     console.log(`      [ERROR] ${err.message}`);
@@ -263,8 +306,10 @@ async function exportServiceAreas() {
     }
     
     fs.writeFileSync(outputPath, JSON.stringify(output, null, 2));
+    const rootOutputPath = path.join(__dirname, 'service-areas.json');
+    fs.writeFileSync(rootOutputPath, JSON.stringify(output, null, 2));
     
-    console.log(`\n[SUCCESS] Exported ${clients.length} clients to data/service-areas.json`);
+    console.log(`\n[SUCCESS] Exported ${clients.length} clients to data/service-areas.json and service-areas.json`);
     console.log('[NEXT] Deploy to GitHub:');
     console.log('  git add data/service-areas.json');
     console.log('  git commit -m "Update precomputed service areas"');
