@@ -65,6 +65,28 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
   font-size: 11px;
   color: #555;
   min-height: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#mapSearchSpinner {
+  display: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #bbb;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: mapSearchSpin 0.8s linear infinite;
+}
+#mapSearchStatus.loading #mapSearchSpinner {
+  display: inline-block;
+}
+#mapSearchBtn.loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+@keyframes mapSearchSpin {
+  to { transform: rotate(360deg); }
 }
 /* Enhanced weather layer styling - DRAMATIC dark colors for visibility */
 .weather-layer-enhanced {
@@ -1320,26 +1342,43 @@ function setupFilters(){}
 
 // MAP SEARCH (ZIP / city / area boundary)
 let mapSearchLayer = null;
+let mapSearchRequestId = 0;
+function setMapSearchStatus(message, isLoading) {
+  const status = document.getElementById('mapSearchStatus');
+  const text = document.getElementById('mapSearchStatusText');
+  if (!status || !text) return;
+  text.textContent = message || '';
+  status.classList.toggle('loading', !!isLoading);
+}
 function clearMapSearchLayer() {
+  mapSearchRequestId += 1;
   if (mapSearchLayer) {
     try { map.removeLayer(mapSearchLayer); } catch(_) {}
     mapSearchLayer = null;
   }
-  const status = document.getElementById('mapSearchStatus');
-  if (status) status.textContent = '';
+  setMapSearchStatus('', false);
+  const btn = document.getElementById('mapSearchBtn');
+  if (btn) btn.classList.remove('loading');
+  const input = document.getElementById('mapSearchInput');
+  if (input) input.disabled = false;
+  if (btn) btn.disabled = false;
 }
 
 async function runMapSearch() {
   const input = document.getElementById('mapSearchInput');
-  const status = document.getElementById('mapSearchStatus');
   if (!input) return;
   const raw = input.value.trim();
   if (!raw) {
-    if (status) status.textContent = 'Enter a ZIP or place';
+    setMapSearchStatus('Enter a ZIP or place', false);
     return;
   }
 
-  if (status) status.textContent = 'Searching…';
+  const requestId = ++mapSearchRequestId;
+  setMapSearchStatus('Searching', true);
+  const btn = document.getElementById('mapSearchBtn');
+  if (btn) btn.classList.add('loading');
+  if (btn) btn.disabled = true;
+  input.disabled = true;
   clearMapSearchLayer();
   const entries = normalizeServiceAreaInput(raw).slice(0, 10);
   const features = [];
@@ -1347,6 +1386,7 @@ async function runMapSearch() {
 
   for (const entry of entries) {
     const result = await fetchPolygonForEntry(entry);
+    if (requestId !== mapSearchRequestId) return;
     if (result?.feature) {
       features.push(result.feature);
       labels.push(result.label || entry);
@@ -1354,7 +1394,10 @@ async function runMapSearch() {
   }
 
   if (features.length === 0) {
-    if (status) status.textContent = 'No boundary found';
+    setMapSearchStatus('No boundary found', false);
+    if (btn) btn.classList.remove('loading');
+    if (btn) btn.disabled = false;
+    input.disabled = false;
     return;
   }
 
@@ -1366,7 +1409,10 @@ async function runMapSearch() {
   });
 
   try { map.fitBounds(mapSearchLayer.getBounds(), { padding: [40, 40] }); } catch(_) {}
-  if (status) status.textContent = `Showing ${features.length} boundary${features.length > 1 ? 'ies' : ''}`;
+  setMapSearchStatus(`Showing ${features.length} boundary${features.length > 1 ? 'ies' : ''}`, false);
+  if (btn) btn.classList.remove('loading');
+  if (btn) btn.disabled = false;
+  input.disabled = false;
 }
 
 // GEOCODE & VALIDATE
