@@ -309,7 +309,7 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
     <!-- API counter removed for fullscreen map -->
     <div id="mapSearchControl">
       <input type="text" id="mapSearchInput" placeholder="Search ZIP / city / area...">
-      <button id="mapSearchBtn" type="button">Show Boundary</button>
+      <button id="mapSearchBtn" type="button">Search</button>
       <button id="mapSearchClear" type="button">Clear Boundary</button>
       <div id="mapSearchStatus"></div>
     </div>
@@ -1757,6 +1757,14 @@ document.getElementById("saveEditBtn").addEventListener("click", async () => {
   }
   
   try {
+    let nextCoords = [originalClient[4][0], originalClient[4][1]];
+    if (newLocation !== originalClient[2]) {
+      nextCoords = await geocodeLocation(newLocation);
+      const cache = getGeocodeCache();
+      cache[newName] = { location: newLocation, coords: nextCoords };
+      setGeocodeCache(cache);
+    }
+
     const response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
       body: JSON.stringify({
@@ -1769,8 +1777,8 @@ document.getElementById("saveEditBtn").addEventListener("click", async () => {
           serviceArea: newServiceArea,
           poster: newPoster,
           slackUserId: newSlackUserId,
-          lat: originalClient[4][0],
-          lng: originalClient[4][1]
+          lat: nextCoords[0],
+          lng: nextCoords[1]
         }
       })
     });
