@@ -751,13 +751,32 @@ async function setupServiceAreaOnClick(marker, client) {
         }
 
         const group = L.layerGroup().addTo(map);
+        const entries = [...new Set(normalizeServiceAreaInput(serviceArea || ""))];
         
         // **PERFORMANCE**: Use precomputed polygons instead of fetching on click
-        // This is instant - zero network calls
-        const results = precomputedServiceAreas[name] || [];
+        // Fetch only missing entries to keep clicks fast but complete
+        let results = precomputedServiceAreas[name] || [];
         console.log('[SA-CLICK] Looking for precomputed data:', name);
         console.log('[SA-CLICK] Available keys:', Object.keys(precomputedServiceAreas));
         console.log('[SA-CLICK] Found polygons:', results.length);
+        const existingEntries = new Set(
+          results
+            .map(r => (r?.entry || '').toString().trim().toLowerCase())
+            .filter(Boolean)
+        );
+        const missingEntries = entries.filter(e => !existingEntries.has(e.toLowerCase()));
+        if (missingEntries.length > 0) {
+          console.log('[SA-CLICK] Missing entries:', missingEntries);
+          for (const entry of missingEntries) {
+            try {
+              const fetched = await fetchPolygonForEntry(entry);
+              if (fetched?.feature) {
+                results.push({ entry, label: fetched.label || entry, feature: fetched.feature });
+              }
+            } catch(_) {}
+          }
+          precomputedServiceAreas[name] = results;
+        }
         
         // Use precomputed data only (no per-click fetch)
         const finalResults = results;

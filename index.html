@@ -622,6 +622,19 @@ async function geocodeLocation(location) {
   return [39.5, -98.35];
 }
 
+async function geocodeLocationStrict(location) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`);
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) return [lat, lon];
+    }
+  } catch(_) {}
+  return null;
+}
+
 // PARSE CSV
 function parseCSV(text) {
   const rows = [];
@@ -1225,8 +1238,29 @@ async function setupServiceAreaOnClick(marker, client) {
 
     // Show areas (precomputed at load time, no per-click fetch)
     const group = L.featureGroup().addTo(map);
-    const results = precomputedServiceAreas[name] || [];
+    const entries = [...new Set(normalizeServiceAreaInput(serviceArea || ""))];
+    let results = precomputedServiceAreas[name] || [];
     console.log(`[SA-RENDER] Precomputed polygons for ${name}: ${results.length}`);
+    const existingEntries = new Set(
+      results
+        .map(r => (r?.entry || '').toString().trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const missingEntries = entries.filter(e => !existingEntries.has(e.toLowerCase()));
+    if (missingEntries.length > 0) {
+      console.log(`[SA-RENDER] Missing entries for ${name}:`, missingEntries);
+      for (const entry of missingEntries) {
+        try {
+          const fetched = await fetchPolygonForEntry(entry);
+          if (fetched?.feature) {
+            results.push({ entry, label: fetched.label || entry, feature: fetched.feature });
+          }
+        } catch(_) {}
+      }
+      precomputedServiceAreas[name] = results;
+      setPrecomputedServiceAreasCache(precomputedServiceAreas);
+      buildMapSearchIndex();
+    }
     if (results.length === 0) {
       console.warn(`[SA-RENDER] No precomputed service areas for ${name}`);
       window.__serviceAreaLayers[name] = group;
@@ -1846,12 +1880,24 @@ document.getElementById("saveEditBtn").addEventListener("click", async () => {
   }
   
   try {
+    const originalLocation = (originalClient[2] || '').trim();
+    const normalizedOriginal = originalLocation.toLowerCase();
+    const normalizedNew = newLocation.toLowerCase();
+    const hasValidCoords = Number.isFinite(originalClient[4]?.[0]) && Number.isFinite(originalClient[4]?.[1]);
+    const locationChanged = normalizedNew !== normalizedOriginal;
+    let geocodeNote = '';
     let nextCoords = [originalClient[4][0], originalClient[4][1]];
-    if (newLocation !== originalClient[2]) {
-      nextCoords = await geocodeLocation(newLocation);
-      const cache = getGeocodeCache();
-      cache[newName] = { location: newLocation, coords: nextCoords };
-      setGeocodeCache(cache);
+
+    if (locationChanged || !hasValidCoords) {
+      const geocoded = await geocodeLocationStrict(newLocation);
+      if (geocoded) {
+        nextCoords = geocoded;
+        const cache = getGeocodeCache();
+        cache[newName] = { location: newLocation, coords: nextCoords };
+        setGeocodeCache(cache);
+      } else {
+        geocodeNote = ' (geocode failed; kept previous coordinates)';
+      }
     }
 
     const response = await fetch(APPS_SCRIPT_URL, {
@@ -1874,7 +1920,7 @@ document.getElementById("saveEditBtn").addEventListener("click", async () => {
     
     const result = await response.json();
     if(result.success) {
-      statusDiv.innerHTML = "✅ Updated! Refreshing...";
+      statusDiv.innerHTML = `✅ Updated${geocodeNote}! Refreshing...`;
       setTimeout(() => location.reload(), 1500);
     } else {
       statusDiv.innerHTML = "❌ Error: " + result.error;
