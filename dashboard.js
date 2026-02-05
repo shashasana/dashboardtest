@@ -703,31 +703,11 @@ async function setupServiceAreaOnClick(marker, client) {
         console.log('[SA-CLICK] Available keys:', Object.keys(precomputedServiceAreas));
         console.log('[SA-CLICK] Found polygons:', results.length);
         
-        // If no precomputed data, fall back to fetching (but cache it)
-        let finalResults = results;
-        if (results.length === 0) {
-          console.log(`[SA-CLICK] ❌ No precomputed data for ${name}, FETCHING...`);
-          const fetchedResults = [];
-          for (const e of entries) {
-            const result = await fetchPolygonForEntry(e);
-            if (!result || !result.feature) continue;
-            fetchedResults.push(result);
-          }
-          finalResults = fetchedResults;
-        }
+        // Use precomputed data only (no per-click fetch)
+        const finalResults = results;
 
         if (finalResults.length === 0) {
-          // Fallback: render a small area around the client's location
-          try {
-            const lat = coords[0], lon = coords[1];
-            let feature = null;
-            if (typeof turf !== 'undefined' && turf.circle) {
-              feature = turf.circle([lon, lat], 5, { steps:64, units:'kilometers' });
-            } else {
-              feature = createSquareFeature(lon, lat, 5);
-            }
-            L.geoJSON(feature, { style: SERVICE_AREA_STYLE }).addTo(group).bindTooltip('Location area', { permanent:false, direction:'center' });
-          } catch(_) {}
+          console.warn(`[SA-CLICK] No precomputed data for ${name}`);
           window.__serviceAreaLayers[name] = group;
           return;
         }

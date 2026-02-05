@@ -651,8 +651,46 @@ let clients = [];
 let filteredClients = [];
 let legendStatus = {};
 let markers = [], chart=null, currentChartType="bar";
+let precomputedServiceAreas = {};
+
+function getPrecomputedServiceAreasCache() {
+  try { return JSON.parse(localStorage.getItem('precomputedServiceAreas') || '{}'); } catch(_) { return {}; }
+}
+function setPrecomputedServiceAreasCache(cache) {
+  try { localStorage.setItem('precomputedServiceAreas', JSON.stringify(cache)); } catch(_) {}
+}
+
+async function loadPrecomputedServiceAreas() {
+  try {
+    const cached = getPrecomputedServiceAreasCache();
+    if (cached && Object.keys(cached).length > 0) {
+      precomputedServiceAreas = cached;
+      console.log(`[PERF] Loaded service areas from local cache: ${Object.keys(precomputedServiceAreas).length} clients`);
+      return;
+    }
+    console.log('[PERF] Loading precomputed service areas from /service-areas.json...');
+    const res = await fetch('/service-areas.json');
+    if (!res.ok) {
+      console.warn(`[PERF] Service areas JSON not found (status ${res.status})`);
+      return;
+    }
+    const data = await res.json();
+    if (data?.clients) {
+      data.clients.forEach(client => {
+        if (client?.name && Array.isArray(client.polygons) && client.polygons.length > 0) {
+          precomputedServiceAreas[client.name] = client.polygons;
+        }
+      });
+      setPrecomputedServiceAreasCache(precomputedServiceAreas);
+      console.log(`[PERF] Loaded service areas for ${Object.keys(precomputedServiceAreas).length} clients`);
+    }
+  } catch (err) {
+    console.warn('[PERF] Error loading precomputed service areas:', err);
+  }
+}
 
 (async () => {
+  await loadPrecomputedServiceAreas();
   clients = await fetchClientsFromSheet();
   
   // Show notification with client count
@@ -1034,20 +1072,17 @@ async function setupServiceAreaOnClick(marker, client) {
       return; // Exit early after toggle off
     }
 
-    // Show areas
+    // Show areas (precomputed at load time, no per-click fetch)
     const group = L.featureGroup().addTo(map);
-    const features = [];
-    const labels = [];
-    for (const e of entries) {
-      console.log(`[SA-FETCH] Fetching polygon for: ${e}`);
-      const result = await fetchPolygonForEntry(e);
-      console.log(`[SA-FETCH] Got result:`, result);
-      if (!result) { console.log(`[SA-FETCH] No result for ${e}`); continue; }
-      features.push(result.feature);
-      labels.push(result.label);
+    const results = precomputedServiceAreas[name] || [];
+    console.log(`[SA-RENDER] Precomputed polygons for ${name}: ${results.length}`);
+    if (results.length === 0) {
+      console.warn(`[SA-RENDER] No precomputed service areas for ${name}`);
+      window.__serviceAreaLayers[name] = group;
+      return;
     }
-    console.log(`[SA-RENDER] Got ${features.length}/${entries.length} features`);
-    if (features.length === 0) { window.__serviceAreaLayers[name] = group; return; }
+    const features = results.map(r => r.feature || r).filter(Boolean);
+    const labels = results.map(r => r.label || '');
 
     // Compute union for solid combined polygon
     let unionFeat = features[0];
