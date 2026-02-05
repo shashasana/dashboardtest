@@ -705,6 +705,7 @@ const PRECOMPUTED_CACHE_KEY = 'precomputedServiceAreasV2';
 const START_WITH_ALL_HIDDEN = true;
 const GEO_CACHE_KEY = 'clientGeocodeCacheV1';
 let geocodeCache = null;
+let mapSearchIndex = {};
 
 function getGeocodeCache() {
   if (geocodeCache) return geocodeCache;
@@ -775,6 +776,28 @@ function setPrecomputedServiceAreasCache(cache) {
   try { localStorage.setItem(PRECOMPUTED_CACHE_KEY, JSON.stringify(cache)); } catch(_) {}
 }
 
+function normalizeMapSearchKey(value) {
+  return (value || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function buildMapSearchIndex() {
+  mapSearchIndex = {};
+  Object.keys(precomputedServiceAreas).forEach(clientName => {
+    const polys = precomputedServiceAreas[clientName];
+    if (!Array.isArray(polys)) return;
+    polys.forEach(poly => {
+      const entryKey = normalizeMapSearchKey(poly?.entry);
+      const labelKey = normalizeMapSearchKey(poly?.label);
+      if (entryKey && !mapSearchIndex[entryKey]) {
+        mapSearchIndex[entryKey] = { feature: poly.feature || poly, label: poly.label || poly.entry || entryKey };
+      }
+      if (labelKey && !mapSearchIndex[labelKey]) {
+        mapSearchIndex[labelKey] = { feature: poly.feature || poly, label: poly.label || poly.entry || labelKey };
+      }
+    });
+  });
+}
+
 async function loadPrecomputedServiceAreas() {
   try {
     const cached = getPrecomputedServiceAreasCache();
@@ -786,6 +809,7 @@ async function loadPrecomputedServiceAreas() {
         }
       });
       precomputedServiceAreas = cached;
+      buildMapSearchIndex();
       console.log(`[PERF] Loaded service areas from local cache: ${Object.keys(precomputedServiceAreas).length} clients`);
       return;
     }
@@ -807,6 +831,7 @@ async function loadPrecomputedServiceAreas() {
         }
       });
       setPrecomputedServiceAreasCache(precomputedServiceAreas);
+      buildMapSearchIndex();
       console.log(`[PERF] Loaded service areas for ${Object.keys(precomputedServiceAreas).length} clients`);
     }
   } catch (err) {
@@ -1350,8 +1375,10 @@ function setMapSearchStatus(message, isLoading) {
   text.textContent = message || '';
   status.classList.toggle('loading', !!isLoading);
 }
-function clearMapSearchLayer() {
-  mapSearchRequestId += 1;
+function clearMapSearchLayer(cancelPending = true) {
+  if (cancelPending) {
+    mapSearchRequestId += 1;
+  }
   if (mapSearchLayer) {
     try { map.removeLayer(mapSearchLayer); } catch(_) {}
     mapSearchLayer = null;
@@ -1374,17 +1401,24 @@ async function runMapSearch() {
   }
 
   const requestId = ++mapSearchRequestId;
+  clearMapSearchLayer(false);
   setMapSearchStatus('Searching', true);
   const btn = document.getElementById('mapSearchBtn');
   if (btn) btn.classList.add('loading');
   if (btn) btn.disabled = true;
   input.disabled = true;
-  clearMapSearchLayer();
   const entries = normalizeServiceAreaInput(raw).slice(0, 10);
   const features = [];
   const labels = [];
 
   for (const entry of entries) {
+    const key = normalizeMapSearchKey(entry);
+    const cached = mapSearchIndex[key];
+    if (cached?.feature) {
+      features.push(cached.feature);
+      labels.push(cached.label || entry);
+      continue;
+    }
     const result = await fetchPolygonForEntry(entry);
     if (requestId !== mapSearchRequestId) return;
     if (result?.feature) {
