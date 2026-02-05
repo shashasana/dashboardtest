@@ -730,7 +730,7 @@ async function setupServiceAreaOnClick(marker, client) {
   try {
     const [name, inds, loc, serviceArea, coords] = client;
     console.log(`[SA-SETUP] Attaching for: ${name}, serviceArea: "${serviceArea}"`);
-    const entries = [...new Set(normalizeServiceAreaInput(serviceArea))].slice(0, 12);
+    const entries = [...new Set(normalizeServiceAreaInput(serviceArea))];
     console.log(`[SA-SETUP] Normalized to:`, entries);
     if (entries.length === 0) {
       console.log(`[SA-SETUP] No entries, skipping click handler for ${name}`);

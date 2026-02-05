@@ -232,6 +232,7 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
       <div style="display:flex; gap:6px; margin-bottom:8px;">
         <button id="previewEditAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>🔍 Preview Area</button>
         <button id="addEditAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>➕ Add to Service Area</button>
+        <button id="cancelEditAreaBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;" disabled>✖ Cancel Preview</button>
       </div>
       <div id="previewEditStatus" style="margin-bottom:8px; font-size:12px; color:#555; display:none;"></div>
       <input type="text" id="editClientPoster" placeholder="Poster Name" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
@@ -1202,7 +1203,7 @@ function buildLabel(entry, item) {
 async function setupServiceAreaOnClick(marker, client) {
   const [name, inds, loc, serviceArea /*string*/, coords] = client;
   console.log(`[SA] Setting up for ${name}, serviceArea: "${serviceArea}"`);
-  const entries = [...new Set(normalizeServiceAreaInput(serviceArea))].slice(0, 12);
+  const entries = [...new Set(normalizeServiceAreaInput(serviceArea))];
   console.log(`[SA] Normalized entries:`, entries);
   if (entries.length === 0) {
     console.log(`[SA] No entries, returning`);
@@ -1689,6 +1690,7 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
     document.getElementById("saveEditBtn").disabled = true;
     document.getElementById("previewEditAreaBtn").disabled = true;
     document.getElementById("addEditAreaBtn").disabled = true;
+    document.getElementById("cancelEditAreaBtn").disabled = true;
     // Clear any existing preview or service area visualization
     clearPreviewLayer();
     if (window.__editServiceAreaLayer) {
@@ -1715,6 +1717,7 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
   document.getElementById("saveEditBtn").disabled = false;
   document.getElementById("previewEditAreaBtn").disabled = false;
   document.getElementById("addEditAreaBtn").disabled = false;
+  document.getElementById("cancelEditAreaBtn").disabled = false;
   document.getElementById("toggleEditAreaEdit").disabled = false;
   document.getElementById("areaSearchEdit").disabled = false;
   
@@ -1726,7 +1729,7 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
     }
     const serviceArea = client[3] || "";
     if (!serviceArea) return;
-    const entries = [...new Set(normalizeServiceAreaInput(serviceArea))].slice(0, 12);
+    const entries = [...new Set(normalizeServiceAreaInput(serviceArea))];
     if (entries.length === 0) return;
     
     const group = L.featureGroup().addTo(map);
@@ -1786,7 +1789,8 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
 // Preview/add service area on Edit Client form
 const previewEditBtn = document.getElementById("previewEditAreaBtn");
 const addEditBtn = document.getElementById("addEditAreaBtn");
-if (previewEditBtn && addEditBtn) {
+const cancelEditBtn = document.getElementById("cancelEditAreaBtn");
+if (previewEditBtn && addEditBtn && cancelEditBtn) {
   previewEditBtn.addEventListener("click", async () => {
     if (previewEditBtn.disabled) return;
     const src = document.getElementById("areaSearchEdit").value.trim();
@@ -1804,6 +1808,11 @@ if (previewEditBtn && addEditBtn) {
       dedupeServiceAreaInput(input);
       setPreviewStatus(statusEl, `Added ${entry} to Service Area`);
     }
+  });
+  cancelEditBtn.addEventListener("click", () => {
+    if (cancelEditBtn.disabled) return;
+    clearPreviewLayer();
+    setPreviewStatus(document.getElementById("previewEditStatus"), '');
   });
 }
 
