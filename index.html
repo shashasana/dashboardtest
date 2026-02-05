@@ -168,6 +168,9 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.industry-marker svg {
+  display: block;
+}
 </style>
 </head>
 <body>
@@ -612,6 +615,57 @@ const colors = {
   "Cleaning":"#00bcd4","Pest Control":"#795548","Flooring":"#607d8b","Events Place":"#d35400",
   "Power Washing":"#00acc1","Home Improvement":"#5e35b1"
 };
+
+function normalizeIndustries(inds) {
+  return (inds || '').split(',').map(i => i.trim()).filter(Boolean);
+}
+
+function buildPieSvg(palette) {
+  const size = 26;
+  const r = 11;
+  const c = size / 2;
+  const total = palette.length || 1;
+  const parts = [];
+
+  function polarToCartesian(cx, cy, radius, angle) {
+    const rad = (angle - 90) * Math.PI / 180;
+    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
+  }
+
+  function describeArc(cx, cy, radius, startAngle, endAngle) {
+    const start = polarToCartesian(cx, cy, radius, endAngle);
+    const end = polarToCartesian(cx, cy, radius, startAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
+    return `M ${cx} ${cy} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
+  }
+
+  if (total === 1) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${c}" cy="${c}" r="${r}" fill="${palette[0]}"/><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+  }
+
+  for (let i = 0; i < total; i++) {
+    const start = (i / total) * 360;
+    const end = ((i + 1) / total) * 360;
+    parts.push(`<path d="${describeArc(c, c, r, start, end)}" fill="${palette[i]}"/>`);
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${parts.join('')}<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+}
+
+function createIndustryIcon(industries) {
+  const unique = [];
+  (industries || []).forEach(ind => {
+    if (!unique.includes(ind)) unique.push(ind);
+  });
+  const palette = unique.length ? unique.map(ind => colors[ind] || "#666") : ["#666"];
+  const svg = buildPieSvg(palette);
+  return L.divIcon({
+    className: 'industry-marker',
+    html: svg,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
+  });
+}
 
 // GOOGLE SHEET CONFIG
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTLuqA1azB3yyRdwNLBIV5WLcO7CezuoMD4yEOtk-MF7V8RTq2ehxR5JnFOCGDQ4-v10TVtmpnTaSn2/pub?output=csv";
@@ -1376,9 +1430,9 @@ function loadMarkers(data) {
   data.forEach(item=>{
     const [name, inds, loc, serviceArea, coords] = item;
     console.log(`[LOAD] Marker: ${name}, serviceArea="${serviceArea}", coords=${JSON.stringify(coords)}`);
-    const mk = L.circleMarker(coords,{ radius:8, fillColor: colors[inds.split(",")[0].trim()]||"#666", color:"#000", weight:1, fillOpacity:0.9 }).addTo(map);
-    mk.industries = inds.split(",").map(i=>i.trim());
-    if(mk.industries.some(i=>legendStatus[i])) map.removeLayer(mk);
+    const industries = normalizeIndustries(inds);
+    const mk = L.marker(coords, { icon: createIndustryIcon(industries) }).addTo(map);
+    mk.industries = industries;
     setupPopup(mk, item);
     setupServiceAreaOnClick(mk, item);
     markers.push(mk);
