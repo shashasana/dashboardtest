@@ -253,6 +253,29 @@ let clients = [];
 let legendStatus = {};
 let markers = [], chart=null, currentChartType="bar";
 
+function normalizeGeoJsonNumbers(node) {
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) {
+      node[i] = normalizeGeoJsonNumbers(node[i]);
+    }
+    return node;
+  }
+  if (typeof node === 'string') {
+    const num = parseFloat(node);
+    return Number.isFinite(num) ? num : node;
+  }
+  return node;
+}
+
+function normalizeFeatureNumbers(feature) {
+  try {
+    if (feature?.geometry?.coordinates) {
+      feature.geometry.coordinates = normalizeGeoJsonNumbers(feature.geometry.coordinates);
+    }
+  } catch (_) {}
+  return feature;
+}
+
 // **PERFORMANCE**: Load all service areas at startup (CDN cached)
 async function loadPrecomputedServiceAreas() {
   try {
@@ -268,7 +291,11 @@ async function loadPrecomputedServiceAreas() {
     if (data.clients) {
       data.clients.forEach(client => {
         if (client.polygons && client.polygons.length > 0) {
-          precomputedServiceAreas[client.name] = client.polygons;
+          const sanitized = client.polygons.map(poly => {
+            if (poly?.feature) normalizeFeatureNumbers(poly.feature);
+            return poly;
+          });
+          precomputedServiceAreas[client.name] = sanitized;
           console.log('[PERF] Preloaded:', client.name, '(' + client.polygons.length + ' polygons)');
         }
       });

@@ -653,6 +653,29 @@ let legendStatus = {};
 let markers = [], chart=null, currentChartType="bar";
 let precomputedServiceAreas = {};
 
+function normalizeGeoJsonNumbers(node) {
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) {
+      node[i] = normalizeGeoJsonNumbers(node[i]);
+    }
+    return node;
+  }
+  if (typeof node === 'string') {
+    const num = parseFloat(node);
+    return Number.isFinite(num) ? num : node;
+  }
+  return node;
+}
+
+function normalizeFeatureNumbers(feature) {
+  try {
+    if (feature?.geometry?.coordinates) {
+      feature.geometry.coordinates = normalizeGeoJsonNumbers(feature.geometry.coordinates);
+    }
+  } catch (_) {}
+  return feature;
+}
+
 function getPrecomputedServiceAreasCache() {
   try { return JSON.parse(localStorage.getItem('precomputedServiceAreas') || '{}'); } catch(_) { return {}; }
 }
@@ -664,6 +687,12 @@ async function loadPrecomputedServiceAreas() {
   try {
     const cached = getPrecomputedServiceAreasCache();
     if (cached && Object.keys(cached).length > 0) {
+      Object.keys(cached).forEach(name => {
+        const polys = cached[name];
+        if (Array.isArray(polys)) {
+          polys.forEach(poly => { if (poly?.feature) normalizeFeatureNumbers(poly.feature); });
+        }
+      });
       precomputedServiceAreas = cached;
       console.log(`[PERF] Loaded service areas from local cache: ${Object.keys(precomputedServiceAreas).length} clients`);
       return;
@@ -678,7 +707,11 @@ async function loadPrecomputedServiceAreas() {
     if (data?.clients) {
       data.clients.forEach(client => {
         if (client?.name && Array.isArray(client.polygons) && client.polygons.length > 0) {
-          precomputedServiceAreas[client.name] = client.polygons;
+          const sanitized = client.polygons.map(poly => {
+            if (poly?.feature) normalizeFeatureNumbers(poly.feature);
+            return poly;
+          });
+          precomputedServiceAreas[client.name] = sanitized;
         }
       });
       setPrecomputedServiceAreasCache(precomputedServiceAreas);
