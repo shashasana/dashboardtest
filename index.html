@@ -239,6 +239,13 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
       <input type="text" id="editClientSlackUserId" placeholder="Slack User ID (e.g., U06MAAHJBGW)" style="width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; border:1px solid #ccc; border-radius:3px;" disabled>
       <button id="saveEditBtn" style="width:100%; padding:8px; background:#3498db; color:white; border:none; border-radius:3px; cursor:pointer;" disabled>Save Changes</button>
       <div id="editStatus" style="margin-top:8px; padding:8px; background:#ecf0f1; border-radius:3px; display:none; font-size:12px;"></div>
+      <div id="editGeocodeConfirm" style="margin-top:8px; padding:8px; border:1px solid #f1c40f; background:#fff7e6; border-radius:3px; display:none; font-size:12px;">
+        <div id="editGeocodeConfirmText" style="margin-bottom:6px;"></div>
+        <div style="display:flex; gap:6px;">
+          <button id="editGeocodeUseBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;">Use Coordinates</button>
+          <button id="editGeocodeCancelBtn" type="button" style="flex:1; padding:6px; border:1px solid #ccc; background:#f7f7f7; cursor:pointer; border-radius:3px;">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <!-- Delete Client Form -->
@@ -739,7 +746,18 @@ function setGeocodeCache(cache) {
 async function resolveClientCoords(name, location, lat, lng) {
   const cache = getGeocodeCache();
   const cached = cache[name];
+  const hasSheetCoords = Number.isFinite(lat) && Number.isFinite(lng);
   if (cached && cached.location === location && Array.isArray(cached.coords)) {
+    if (hasSheetCoords) {
+      const [clat, clng] = cached.coords;
+      const differs = Math.abs(clat - lat) > 0.000001 || Math.abs(clng - lng) > 0.000001;
+      if (differs) {
+        const coords = [lat, lng];
+        cache[name] = { location, coords };
+        setGeocodeCache(cache);
+        return coords;
+      }
+    }
     return cached.coords;
   }
   if (cached && cached.location !== location) {
@@ -748,7 +766,7 @@ async function resolveClientCoords(name, location, lat, lng) {
     setGeocodeCache(cache);
     return coords;
   }
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+  if (hasSheetCoords) {
     const coords = [lat, lng];
     cache[name] = { location, coords };
     setGeocodeCache(cache);
@@ -1714,6 +1732,7 @@ function populateEditDropdown() {
 
 document.getElementById("clientToEdit").addEventListener("change", (e) => {
   const idx = parseInt(e.target.value);
+  hideEditGeocodeConfirm();
   if(isNaN(idx)) {
     document.getElementById("editClientName").disabled = true;
     document.getElementById("editClientIndustry").disabled = true;
@@ -1824,6 +1843,42 @@ document.getElementById("clientToEdit").addEventListener("change", (e) => {
 const previewEditBtn = document.getElementById("previewEditAreaBtn");
 const addEditBtn = document.getElementById("addEditAreaBtn");
 const cancelEditBtn = document.getElementById("cancelEditAreaBtn");
+const editGeocodeConfirm = document.getElementById("editGeocodeConfirm");
+const editGeocodeConfirmText = document.getElementById("editGeocodeConfirmText");
+const editGeocodeUseBtn = document.getElementById("editGeocodeUseBtn");
+const editGeocodeCancelBtn = document.getElementById("editGeocodeCancelBtn");
+let pendingEditGeocodeConfirm = null;
+
+function hideEditGeocodeConfirm() {
+  if (editGeocodeConfirm) editGeocodeConfirm.style.display = 'none';
+  if (editGeocodeConfirmText) editGeocodeConfirmText.textContent = '';
+  pendingEditGeocodeConfirm = null;
+}
+
+function requestEditGeocodeConfirm(coords, location) {
+  if (!editGeocodeConfirm || !editGeocodeConfirmText) return Promise.resolve(true);
+  const lat = coords[0].toFixed(6);
+  const lng = coords[1].toFixed(6);
+  editGeocodeConfirmText.textContent = `Geocode result for "${location}": ${lat}, ${lng}. Use these coordinates?`;
+  editGeocodeConfirm.style.display = 'block';
+  return new Promise(resolve => {
+    pendingEditGeocodeConfirm = resolve;
+  });
+}
+
+if (editGeocodeUseBtn) {
+  editGeocodeUseBtn.addEventListener('click', () => {
+    if (pendingEditGeocodeConfirm) pendingEditGeocodeConfirm(true);
+    hideEditGeocodeConfirm();
+  });
+}
+if (editGeocodeCancelBtn) {
+  editGeocodeCancelBtn.addEventListener('click', () => {
+    if (pendingEditGeocodeConfirm) pendingEditGeocodeConfirm(false);
+    hideEditGeocodeConfirm();
+  });
+}
+
 if (previewEditBtn && addEditBtn && cancelEditBtn) {
   previewEditBtn.addEventListener("click", async () => {
     if (previewEditBtn.disabled) return;
@@ -1891,6 +1946,11 @@ document.getElementById("saveEditBtn").addEventListener("click", async () => {
     if (locationChanged || !hasValidCoords) {
       const geocoded = await geocodeLocationStrict(newLocation);
       if (geocoded) {
+        const shouldUse = await requestEditGeocodeConfirm(geocoded, newLocation);
+        if (!shouldUse) {
+          statusDiv.innerHTML = "Update canceled. Address was not saved.";
+          return;
+        }
         nextCoords = geocoded;
         const cache = getGeocodeCache();
         cache[newName] = { location: newLocation, coords: nextCoords };
@@ -1941,6 +2001,7 @@ document.querySelectorAll(".closeForm").forEach(btn => {
     document.getElementById(e.target.dataset.form).style.display = "none";
     // Clear preview layer and service area layers
     clearPreviewLayer();
+    hideEditGeocodeConfirm();
     if (window.__editServiceAreaLayer) {
       try { map.removeLayer(window.__editServiceAreaLayer); } catch(_) {}
       window.__editServiceAreaLayer = null;
