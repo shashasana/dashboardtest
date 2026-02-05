@@ -307,6 +307,12 @@ body { margin:0; font-family: Arial, sans-serif; height:100vh; overflow: hidden;
   </div>
   <div id="map">
     <!-- API counter removed for fullscreen map -->
+    <div id="mapSearchControl">
+      <input type="text" id="mapSearchInput" placeholder="Search ZIP / city / area...">
+      <button id="mapSearchBtn" type="button">Show Boundary</button>
+      <button id="mapSearchClear" type="button">Clear Boundary</button>
+      <div id="mapSearchStatus"></div>
+    </div>
   </div>
 </div>
 <div id="accessDenied">
@@ -656,8 +662,9 @@ async function fetchClientsFromSheet() {
         const industry = (cells[1] || "Unknown").replace(/^"|"$/g, '').trim();
         const location = (cells[2] || "Unknown").replace(/^"|"$/g, '').trim();
         const serviceArea = (cells[3] || "").replace(/^"|"$/g, '').trim();
-        let coords = [39.5, -98.35];
-        coords = await geocodeLocation(location);
+        const lat = cells[4] ? parseFloat(cells[4]) : null;
+        const lng = cells[5] ? parseFloat(cells[5]) : null;
+        const coords = await resolveClientCoords(name, location, lat, lng);
         parsed.push([name, industry, location, serviceArea, coords]);
       }
     }
@@ -674,6 +681,47 @@ let markers = [], chart=null, currentChartType="bar";
 let precomputedServiceAreas = {};
 const PRECOMPUTED_CACHE_KEY = 'precomputedServiceAreasV2';
 const START_WITH_ALL_HIDDEN = true;
+const GEO_CACHE_KEY = 'clientGeocodeCacheV1';
+let geocodeCache = null;
+
+function getGeocodeCache() {
+  if (geocodeCache) return geocodeCache;
+  try {
+    geocodeCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}');
+  } catch (_) {
+    geocodeCache = {};
+  }
+  return geocodeCache;
+}
+
+function setGeocodeCache(cache) {
+  geocodeCache = cache;
+  try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache)); } catch (_) {}
+}
+
+async function resolveClientCoords(name, location, lat, lng) {
+  const cache = getGeocodeCache();
+  const cached = cache[name];
+  if (cached && cached.location === location && Array.isArray(cached.coords)) {
+    return cached.coords;
+  }
+  if (cached && cached.location !== location) {
+    const coords = await geocodeLocation(location);
+    cache[name] = { location, coords };
+    setGeocodeCache(cache);
+    return coords;
+  }
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    const coords = [lat, lng];
+    cache[name] = { location, coords };
+    setGeocodeCache(cache);
+    return coords;
+  }
+  const coords = await geocodeLocation(location);
+  cache[name] = { location, coords };
+  setGeocodeCache(cache);
+  return coords;
+}
 
 function normalizeGeoJsonNumbers(node) {
   if (Array.isArray(node)) {
@@ -1783,11 +1831,17 @@ if (toggleEdit) {
 
 function buildLegend(){
   const box=document.getElementById("legendBox");
-  box.innerHTML="<button id='resetLegend'>Reset All</button><b>Industry</b><br><br>";
+  box.innerHTML="<button id='resetLegend'>Select All</button><button id='hideAllLegend'>Unselect All</button><b>Industry</b><br><br>";
   const set=new Set();
   clients.forEach(c=>c[1].split(",").forEach(i=>set.add(i.trim())));
+  if (set.size === 0) {
+    box.innerHTML += "<div style='font-size:12px; color:#777;'>No clients loaded</div>";
+    return;
+  }
   [...set].sort().forEach(ind=>{
-    legendStatus[ind]=legendStatus[ind]||false;
+    if (legendStatus[ind] === undefined) {
+      legendStatus[ind] = START_WITH_ALL_HIDDEN;
+    }
     const div=document.createElement("div");
     div.className="legend-item";
     div.innerHTML=`<div class="legend-color" style="background:${colors[ind]||"#666"}"></div>${ind}`;
@@ -1803,6 +1857,12 @@ function buildLegend(){
   document.getElementById("resetLegend").onclick = () => {
     Object.keys(legendStatus).forEach(k=>legendStatus[k]=false);
     document.querySelectorAll(".legend-item").forEach(d=>d.style.textDecoration="none");
+    applyFilters();
+  }
+
+  document.getElementById("hideAllLegend").onclick = () => {
+    Object.keys(legendStatus).forEach(k=>legendStatus[k]=true);
+    document.querySelectorAll(".legend-item").forEach(d=>d.style.textDecoration="line-through");
     applyFilters();
   }
 }

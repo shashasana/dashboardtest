@@ -184,8 +184,9 @@ async function fetchClientsFromSheet() {
             const industry = (cells[1] || "Unknown").toString().trim();
             const location = (cells[2] || "Unknown").toString().trim();
             const serviceArea = (cells[3] || "").toString().trim();
-            let coords = [39.5, -98.35];
-            coords = await geocodeLocation(location);
+            const lat = cells[4] ? parseFloat(cells[4]) : null;
+            const lng = cells[5] ? parseFloat(cells[5]) : null;
+            const coords = await resolveClientCoords(name, location, lat, lng);
             parsed.push([name, industry, location, serviceArea, coords]);
           }
         }
@@ -227,8 +228,9 @@ async function fetchFromCSV() {
         const industry = (cells[1] || "Unknown").replace(/^"|"$/g, '').trim();
         const location = (cells[2] || "Unknown").replace(/^"|"$/g, '').trim();
         const serviceArea = (cells[3] || "").replace(/^"|"$/g, '').trim();
-        let coords = [39.5, -98.35];
-        coords = await geocodeLocation(location);
+        const lat = cells[4] ? parseFloat(cells[4]) : null;
+        const lng = cells[5] ? parseFloat(cells[5]) : null;
+        const coords = await resolveClientCoords(name, location, lat, lng);
         parsed.push([name, industry, location, serviceArea, coords]);
       }
     }
@@ -238,6 +240,47 @@ async function fetchFromCSV() {
 let clients = [];
 let legendStatus = {};
 let markers = [], chart=null, currentChartType="bar";
+const GEO_CACHE_KEY = 'clientGeocodeCacheV1';
+let geocodeCache = null;
+
+function getGeocodeCache() {
+  if (geocodeCache) return geocodeCache;
+  try {
+    geocodeCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}');
+  } catch (_) {
+    geocodeCache = {};
+  }
+  return geocodeCache;
+}
+
+function setGeocodeCache(cache) {
+  geocodeCache = cache;
+  try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(cache)); } catch (_) {}
+}
+
+async function resolveClientCoords(name, location, lat, lng) {
+  const cache = getGeocodeCache();
+  const cached = cache[name];
+  if (cached && cached.location === location && Array.isArray(cached.coords)) {
+    return cached.coords;
+  }
+  if (cached && cached.location !== location) {
+    const coords = await geocodeLocation(location);
+    cache[name] = { location, coords };
+    setGeocodeCache(cache);
+    return coords;
+  }
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    const coords = [lat, lng];
+    cache[name] = { location, coords };
+    setGeocodeCache(cache);
+    return coords;
+  }
+  const coords = await geocodeLocation(location);
+  cache[name] = { location, coords };
+  setGeocodeCache(cache);
+  return coords;
+}
 
 function normalizeGeoJsonNumbers(node) {
   if (Array.isArray(node)) {
